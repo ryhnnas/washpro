@@ -6,6 +6,7 @@ import { LogIn, ArrowRight } from 'lucide-react';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('OWNER');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -13,7 +14,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await authService.login(email, password);
+      const data = await authService.login(email, password, role);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/dashboard');
@@ -38,10 +39,28 @@ export default function Login() {
           <h2 className="text-3xl font-black text-primary mb-2 tracking-tight">Selamat Datang</h2>
           <p className="text-slate-500 font-medium text-sm">Masuk ke sistem WashPro Web POS</p>
         </div>
+
+        {/* Role Toggle */}
+        <div className="flex bg-slate-100 p-1 rounded-2xl mb-8 relative z-20">
+          <button 
+            type="button"
+            onClick={() => setRole('OWNER')}
+            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${role === 'OWNER' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            Masuk Pemilik
+          </button>
+          <button 
+            type="button"
+            onClick={() => setRole('STAFF')}
+            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${role === 'STAFF' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            Masuk Staf
+          </button>
+        </div>
         
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Administrator / Pemilik</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email {role === 'OWNER' ? 'Pemilik Bisnis' : 'Staf Laundry'}</label>
             <input 
               type="email" 
               placeholder="nama@email.com" 
@@ -83,6 +102,9 @@ export default function Login() {
               Buka Toko
             </Link>
           </p>
+          <div className="mt-4">
+            <Link to="/" className="text-slate-400 hover:text-slate-600 text-sm font-semibold transition-colors flex items-center justify-center gap-1 text-center"><ArrowRight size={14} className="rotate-180"/> Kembali ke Beranda</Link>
+          </div>
         </div>
       </div>
     </div>

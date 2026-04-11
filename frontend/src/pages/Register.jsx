@@ -19,7 +19,7 @@ export default function Register() {
     try {
       await authService.register(formData);
       alert("Bisnis berhasil didaftarkan! Silakan Login.");
-      navigate('/');
+      navigate('/login');
     } catch (err) {
       alert(err.response?.data?.error || "Gagal daftar");
     } finally {
@@ -67,10 +67,10 @@ export default function Register() {
           </div>
           
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Administrator</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Pemilik Bisnis</label>
             <input 
               type="email" 
-              placeholder="admin@laundry.com" 
+              placeholder="owner@laundry.com" 
               className="premium-input bg-slate-50"
               onChange={e => setFormData({...formData, email: e.target.value})}
               required
@@ -102,10 +102,13 @@ export default function Register() {
         <div className="mt-8 pt-6 border-t border-slate-200 text-center">
           <p className="text-slate-500 text-sm font-medium">
             Sudah punya akun?{' '}
-            <Link to="/" className="text-primary font-black hover:text-primary-light transition-colors underline decoration-2 underline-offset-4">
+            <Link to="/login" className="text-primary font-black hover:text-primary-light transition-colors underline decoration-2 underline-offset-4">
               Login di sini
             </Link>
           </p>
+          <div className="mt-4">
+            <Link to="/" className="text-slate-400 hover:text-slate-600 text-sm font-semibold transition-colors flex items-center justify-center gap-1 text-center"><ArrowRight size={14} className="rotate-180"/> Kembali ke Beranda</Link>
+          </div>
         </div>
       </div>
     </div>

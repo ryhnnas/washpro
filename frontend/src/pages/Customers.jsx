@@ -1,32 +1,44 @@
 import { useState, useEffect } from 'react';
-import { Users, Edit, Trash2, Search, Save, X } from 'lucide-react';
+import { Users, Edit, Trash2, Search, Save, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/axios';
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+  
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '' });
 
+  // Handle Search debounce
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset page on search
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [search]);
+
   const fetchCustomers = async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/customers');
-      setCustomers(res.data);
+      const res = await api.get(`/customers?page=${page}&limit=50&search=${debouncedSearch}`);
+      setCustomers(res.data.data || []);
+      setTotalPages(res.data.pagination?.totalPages || 1);
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
-
-  const filtered = customers.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    (c.phone && c.phone.includes(search))
-  );
+  }, [page, debouncedSearch]);
 
   const handleEdit = (c) => {
     setEditingId(c.id);
@@ -126,35 +138,61 @@ export default function Customers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filtered.length === 0 && (
+              {loading ? (
+                <tr>
+                  <td colSpan="4" className="px-6 py-12 text-center text-slate-500 text-base">Memuat pelanggan...</td>
+                </tr>
+              ) : customers.length === 0 ? (
                 <tr>
                   <td colSpan="4" className="px-6 py-12 text-center text-slate-500 text-base">Belum ada pelanggan ditemukan.</td>
                 </tr>
+              ) : (
+                customers.map((c) => (
+                  <tr key={c.id} className="hover:bg-primary/[0.02] transition-colors">
+                    <td className="px-6 py-4">
+                       <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-tertiary/20 text-tertiary-hover flex items-center justify-center font-bold">
+                             {c.name.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="font-bold text-primary">{c.name}</span>
+                       </div>
+                    </td>
+                    <td className="px-6 py-4 font-medium">{c.phone || '-'}</td>
+                    <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">{c.address || '-'}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button onClick={() => handleEdit(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2">
+                         <Edit size={18} />
+                      </button>
+                      <button onClick={() => handleDelete(c.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                         <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
-              {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-primary/[0.02] transition-colors">
-                  <td className="px-6 py-4">
-                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-tertiary/20 text-tertiary-hover flex items-center justify-center font-bold">
-                           {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-bold text-primary">{c.name}</span>
-                     </div>
-                  </td>
-                  <td className="px-6 py-4 font-medium">{c.phone || '-'}</td>
-                  <td className="px-6 py-4 text-slate-500 max-w-[200px] truncate">{c.address || '-'}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button onClick={() => handleEdit(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2">
-                       <Edit size={18} />
-                    </button>
-                    <button onClick={() => handleDelete(c.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
-                       <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Info */}
+        <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
+           <span className="text-sm font-bold text-slate-500">Halaman {page} dari {totalPages || 1}</span>
+           <div className="flex items-center gap-2">
+             <button 
+               disabled={page <= 1}
+               onClick={() => setPage(p => p - 1)}
+               className="p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-primary disabled:opacity-50 disabled:pointer-events-none transition-colors"
+             >
+               <ChevronLeft size={20} />
+             </button>
+             <button 
+               disabled={page >= totalPages}
+               onClick={() => setPage(p => p + 1)}
+               className="p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-primary disabled:opacity-50 disabled:pointer-events-none transition-colors"
+             >
+               <ChevronRight size={20} />
+             </button>
+           </div>
         </div>
       </div>
     </div>

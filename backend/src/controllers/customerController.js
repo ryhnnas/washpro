@@ -2,11 +2,39 @@ const prisma = require('../config/prisma');
 
 const getCustomers = async (req, res) => {
   try {
-    const customers = await prisma.customer.findMany({
-      where: { businessId: req.user.businessId },
-      orderBy: { name: 'asc' }
+    const { page = 1, limit = 50, search = '' } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    let whereClause = {
+      businessId: req.user.businessId
+    };
+
+    if (search) {
+      whereClause.OR = [
+        { name: { contains: search } },
+        { phone: { contains: search } }
+      ];
+    }
+
+    const [customers, totalCount] = await Promise.all([
+      prisma.customer.findMany({
+        where: whereClause,
+        orderBy: { name: 'asc' },
+        skip,
+        take
+      }),
+      prisma.customer.count({ where: whereClause })
+    ]);
+
+    res.json({
+      data: customers,
+      pagination: {
+        totalItems: totalCount,
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / take)
+      }
     });
-    res.json(customers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

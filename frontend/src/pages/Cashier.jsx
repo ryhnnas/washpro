@@ -27,11 +27,11 @@ export default function Cashier() {
     Promise.all([
       api.get('/services').catch(() => ({ data: [] })),
       api.get('/settings').catch(() => ({ data: null })),
-      api.get('/customers').catch(() => ({ data: [] }))
+      api.get('/customers?limit=100').catch(() => ({ data: { data: [] } }))
     ]).then(([resSvc, resSet, resCust]) => {
       setServices(resSvc.data);
       if(resSet.data) setSettings(resSet.data);
-      setCustomers(resCust.data);
+      setCustomers(resCust.data.data || []);
     });
     
     const handleClickOutside = (event) => {
@@ -105,8 +105,8 @@ export default function Cashier() {
         paymentMethod: 'CASH'
       });
       // Refresh customers to get new ones
-      const resCust = await api.get('/customers');
-      setCustomers(resCust.data);
+      const resCust = await api.get('/customers?limit=100');
+      setCustomers(resCust.data.data || []);
     } catch (err) {
       alert("Gagal menyimpan transaksi");
     } finally {

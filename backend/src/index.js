@@ -8,6 +8,7 @@ const transactionRoutes = require('./routes/transactionRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const customerRoutes = require('./routes/customerRoutes');
+const staffRoutes = require('./routes/staffRoutes');
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/customers', customerRoutes);
+app.use('/api/staff', staffRoutes);
 
 // Test Route
 app.get('/', (req, res) => res.send("WashPro API Active"));

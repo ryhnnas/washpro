@@ -44,8 +44,8 @@ export default function Tracking() {
   const fetchTransactions = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/transactions');
-      setTransactions(res.data);
+      const res = await api.get('/transactions?limit=100');
+      setTransactions(res.data.data || []);
     } catch (err) {
       console.error(err);
     }

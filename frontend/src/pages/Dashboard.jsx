@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { DollarSign, FileText, TrendingUp, Sparkles } from 'lucide-react';
+import { DollarSign, FileText, TrendingUp, Sparkles, AlertCircle, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../lib/axios';
+import DateFilter, { getDateRange } from '../components/DateFilter';
 
 const COLORS = ['#1A365D', '#FFD700']; // Primary and Tertiary
 
@@ -9,20 +11,28 @@ export default function Dashboard() {
   const [stats, setStats] = useState({
     totalTransactions: 0,
     totalRevenue: 0,
-    paymentStats: []
+    paymentStats: [],
+    todayOrders: []
   });
+
+  const [dateFilter, setDateFilter] = useState('hari_ini');
+  const [customDate, setCustomDate] = useState({ start: '', end: '' });
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await api.get('/dashboard/stats');
+        const { startDate, endDate } = getDateRange(dateFilter, customDate);
+        // Only fetch if customDate is fully set when on kustom
+        if (dateFilter === 'kustom' && (!customDate.start || !customDate.end)) return;
+
+        const res = await api.get(`/dashboard/stats?startDate=${startDate}&endDate=${endDate}`);
         setStats(res.data);
       } catch (err) {
         console.error(err);
       }
     };
     fetchStats();
-  }, []);
+  }, [dateFilter, customDate.start, customDate.end]);
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -31,8 +41,14 @@ export default function Dashboard() {
            <h1 className="text-3xl font-bold text-primary tracking-tight flex items-center gap-2">
               Dashboard <Sparkles className="text-tertiary" size={24} />
            </h1>
-           <p className="text-primary-light mt-1 font-medium">Ringkasan performa bisnis Anda hari ini.</p>
+           <p className="text-primary-light mt-1 font-medium">Ringkasan performa bisnis Anda berdasarkan periode.</p>
         </div>
+        <DateFilter 
+          filter={dateFilter} 
+          setFilter={setDateFilter} 
+          customDate={customDate} 
+          setCustomDate={setCustomDate} 
+        />
       </div>
 
       {/* Cards */}
@@ -101,6 +117,65 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Pesanan Hari Ini */}
+      <div className="glass-card rounded-3xl bg-white border border-slate-200 overflow-hidden">
+        <div className="p-6 md:p-8 flex items-center justify-between border-b border-slate-100">
+          <h3 className="text-xl font-black text-primary">Pesanan Masuk (Hari Ini)</h3>
+          <Link to="/reports" className="text-sm font-bold text-primary hover:text-tertiary transition-colors flex items-center gap-1">
+            Lihat Semua Laporan <ArrowRight size={16} />
+          </Link>
+        </div>
+        
+        {dateFilter === 'hari_ini' ? (
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead className="bg-primary/5 text-primary font-black border-b border-slate-200">
+                <tr>
+                  <th className="px-8 py-4">Waktu</th>
+                  <th className="px-8 py-4">Pelanggan</th>
+                  <th className="px-8 py-4">Layanan</th>
+                  <th className="px-8 py-4 text-right">Nominal</th>
+                  <th className="px-8 py-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {!stats.todayOrders || stats.todayOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-8 py-10 text-center text-slate-500 font-medium">Belum ada pesanan masuk hari ini.</td>
+                  </tr>
+                ) : (
+                  stats.todayOrders.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-8 py-4 font-bold text-slate-500">
+                        {new Date(t.startDate).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
+                      </td>
+                      <td className="px-8 py-4 font-black text-primary">{t.customerName || '-'}</td>
+                      <td className="px-8 py-4">{t.serviceName}</td>
+                      <td className="px-8 py-4 text-right font-black text-emerald-600">Rp {t.totalPrice.toLocaleString('id-ID')}</td>
+                      <td className="px-8 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${t.status === 'SELESAI' || t.status === 'DIAMBIL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {t.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-12 flex flex-col items-center justify-center text-center bg-slate-50">
+            <AlertCircle size={48} className="text-slate-300 mb-4" />
+            <h4 className="text-lg font-bold text-slate-600 mb-2">Riwayat Di Luar Jangkauan Hari Ini</h4>
+            <p className="text-slate-500 max-w-md text-sm">Anda sedang memfilter tanggal selain Hari Ini. Untuk melihat daftar pesanan secara lengkap, silakan tuju halaman laporan.</p>
+            <Link to="/reports" className="mt-4 px-6 py-2.5 bg-primary text-white font-bold rounded-xl shadow-md hover:bg-primary-light transition-colors">
+              Buka Laporan
+            </Link>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }

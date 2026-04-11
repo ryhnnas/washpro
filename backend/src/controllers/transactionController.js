@@ -2,11 +2,48 @@ const prisma = require('../config/prisma');
 
 const getTransactions = async (req, res) => {
   try {
-    const transactions = await prisma.transaction.findMany({
-      where: { businessId: req.user.businessId },
-      orderBy: { startDate: 'desc' }
+    const { page = 1, limit = 50, search = '', startDate, endDate } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    // Build filter query
+    let whereClause = {
+      businessId: req.user.businessId
+    };
+
+    if (search) {
+      whereClause.OR = [
+        { customerName: { contains: search } },
+        { serviceName: { contains: search } },
+        { status: { contains: search } },
+      ];
+    }
+
+    if (startDate && endDate) {
+      whereClause.startDate = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    const [transactions, totalCount] = await Promise.all([
+      prisma.transaction.findMany({
+        where: whereClause,
+        orderBy: { startDate: 'desc' },
+        skip,
+        take
+      }),
+      prisma.transaction.count({ where: whereClause })
+    ]);
+
+    res.json({
+      data: transactions,
+      pagination: {
+        totalItems: totalCount,
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / take)
+      }
     });
-    res.json(transactions);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
