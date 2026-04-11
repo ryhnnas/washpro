@@ -1,0 +1,90 @@
+import { useState } from 'react';
+import { authService } from '../services/authService';
+import { useNavigate, Link } from 'react-router-dom';
+import { LogIn, ArrowRight } from 'lucide-react';
+
+export default function Login() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const data = await authService.login(email, password);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/dashboard');
+    } catch (err) {
+      alert(err.response?.data?.message || "Login gagal");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen relative flex items-center justify-center bg-secondary overflow-hidden p-4">
+      {/* Background Ornaments */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-tertiary/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+      <div className="w-full max-w-[420px] bg-white border border-slate-200 shadow-2xl p-8 md:p-10 rounded-3xl z-10 relative">
+        <div className="mb-10 text-center">
+          <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-[#254b85] items-center justify-center text-white mb-6 shadow-lg shadow-primary/30">
+            <LogIn size={32} />
+          </div>
+          <h2 className="text-3xl font-black text-primary mb-2 tracking-tight">Selamat Datang</h2>
+          <p className="text-slate-500 font-medium text-sm">Masuk ke sistem WashPro Web POS</p>
+        </div>
+        
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Administrator / Pemilik</label>
+            <input 
+              type="email" 
+              placeholder="nama@email.com" 
+              className="premium-input bg-slate-50"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Katasandi</label>
+            <input 
+              type="password" 
+              placeholder="••••••••" 
+              className="premium-input bg-slate-50 select-all"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          <button 
+            disabled={loading}
+            className="premium-button w-full mt-2 group text-white bg-primary hover:bg-primary-light shadow-primary/25"
+          >
+            {loading ? "Memproses..." : (
+              <>
+                Mendekripsi <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-8 pt-6 border-t border-slate-200 text-center">
+          <p className="text-slate-500 text-sm font-medium">
+            Ingin mendaftar layanan baru?{' '}
+            <Link to="/register" className="text-primary font-black hover:text-primary-light transition-colors underline decoration-2 underline-offset-4">
+              Buka Toko
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,130 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. Tabel Bisnis (Tenant)
+model Business {
+  id            String   @id @default(uuid())
+  name          String
+  address       String?  @db.Text
+  whatsappToken String?  @map("whatsapp_token")
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  // Relasi
+  users         User[]
+  transactions  Transaction[]
+  services      Service[]
+  setting       BusinessSetting?
+  customers     Customer[]
+}
+
+// 2. Tabel User (RBAC)
+model User {
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  name       String
+  email      String   @unique
+  password   String
+  role       Role     @default(STAFF)
+  
+  // Relasi ke Bisnis
+  business   Business @relation(fields: [businessId], references: [id])
+  
+  createdAt  DateTime @default(now()) @map("created_at")
+}
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+// 3. Tabel Layanan (Owner bisa custom harga/jenis)
+model Service {
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  name       String   // Contoh: "Cuci Reguler"
+  price      Int      // Harga per KG atau per Unit
+  type       ServiceType // KILOAN atau SATUAN
+  unit       String   @default("kg") // kg, pcs, m2, dll
+
+  business   Business @relation(fields: [businessId], references: [id])
+}
+
+enum ServiceType {
+  KILOAN
+  SATUAN
+}
+
+// 4. Tabel Transaksi (Inti POS)
+model Transaction {
+  id            String    @id @default(uuid())
+  businessId    String    @map("business_id")
+  customerId    String?   @map("customer_id")
+  customerName  String    @map("customer_name")
+  customerPhone String?   @map("customer_phone")
+  customerAddress String? @db.Text @map("customer_address")
+  
+  serviceName   String    @map("service_name") // Simpan nama layanan saat transaksi (antisipasi harga berubah di masa depan)
+  weight        Float     // Jumlah kilo atau jumlah pcs
+  totalPrice    Int       @map("total_price")
+  
+  status        Status    @default(PENDING)
+  paymentMethod Payment   @map("payment_method")
+  
+  startDate     DateTime  @default(now()) @map("start_date")
+  endDate       DateTime? @map("end_date")
+
+  business      Business  @relation(fields: [businessId], references: [id])
+  customer      Customer? @relation(fields: [customerId], references: [id])
+}
+
+enum Status {
+  PENDING
+  PROSES
+  SELESAI
+  DIAMBIL
+}
+
+enum Payment {
+  CASH
+  QRIS
+}
+
+// 5. Tabel Pengaturan Bisnis (Hak Akses & Custom Input Kasir)
+model BusinessSetting {
+  id                    String   @id @default(uuid())
+  businessId            String   @unique @map("business_id")
+  
+  // Custom Input Kasir (JSON stringfy atau Boolean terpisah)
+  // Kita buat boolean saja untuk MVP Custom Input Kasir
+  requireCustomerName   Boolean  @default(true)
+  requireCustomerPhone  Boolean  @default(true)
+  requireCustomerAddress Boolean @default(false)
+  
+  // Pengaturan Hak Akses Staff (JSON stringify list menu yang dibolehkan)
+  staffAllowedMenus     String   @db.Text
+
+  business              Business @relation(fields: [businessId], references: [id])
+}
+
+// 6. Tabel Database Pelanggan
+model Customer {
+  id            String   @id @default(uuid())
+  businessId    String   @map("business_id")
+  name          String
+  phone         String?
+  address       String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  business      Business @relation(fields: [businessId], references: [id])
+  transactions  Transaction[]
+  
+  @@unique([businessId, phone]) // Phone unik per bisnis agar gampang dicari
+}

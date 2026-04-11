@@ -1,0 +1,27 @@
+{
+  "name": "washpro-monorepo",
+  "version": "1.0.0",
+  "description": "SaaS Multi-tenant Laundry POS",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "install-all": "npm install && npm install --workspace=backend && npm install --workspace=frontend",
+    "backend": "npm run dev --workspace=backend",
+    "frontend": "npm run dev --workspace=frontend"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^8.2.2",
+    "postcss": "^8.5.9",
+    "tailwindcss": "^4.2.2"
+  },
+  "dependencies": {
+    "axios": "^1.15.0",
+    "lucide-react": "^1.8.0",
+    "react-router-dom": "^7.14.0"
+  }
+}
