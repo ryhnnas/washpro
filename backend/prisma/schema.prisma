@@ -14,7 +14,7 @@ model Business {
   id            String   @id @default(uuid())
   name          String
   address       String?  @db.Text
-  whatsappToken String?  @map("whatsapp_token")
+  phone         String?
   createdAt     DateTime @default(now()) @map("created_at")
   
   // Relasi
@@ -23,6 +23,7 @@ model Business {
   services      Service[]
   setting       BusinessSetting?
   customers     Customer[]
+  membershipPackageTemplates MembershipPackageTemplate[]
 }
 
 // 2. Tabel User (RBAC)
@@ -53,8 +54,13 @@ model Service {
   price      Int      // Harga per KG atau per Unit
   type       ServiceType // KILOAN atau SATUAN
   unit       String   @default("kg") // kg, pcs, m2, dll
+  estimateValue Int   @default(24) @map("estimate_value")
+  estimateUnit  EstimateUnit @default(HOUR) @map("estimate_unit")
 
   business   Business @relation(fields: [businessId], references: [id])
+  packageQuotaItems MembershipPackageQuotaItem[]
+  membershipBalances CustomerMembershipQuotaBalance[]
+  membershipUsages   CustomerMembershipUsageLog[]
 }
 
 enum ServiceType {
@@ -62,27 +68,40 @@ enum ServiceType {
   SATUAN
 }
 
+enum EstimateUnit {
+  HOUR
+  DAY
+}
+
 // 4. Tabel Transaksi (Inti POS)
 model Transaction {
   id            String    @id @default(uuid())
   businessId    String    @map("business_id")
   customerId    String?   @map("customer_id")
+  customerMembershipId String? @map("customer_membership_id")
   customerName  String    @map("customer_name")
   customerPhone String?   @map("customer_phone")
   customerAddress String? @db.Text @map("customer_address")
   
   serviceName   String    @map("service_name") // Simpan nama layanan saat transaksi (antisipasi harga berubah di masa depan)
   weight        Float     // Jumlah kilo atau jumlah pcs
+  lineItems     Json?     @map("line_items")
   totalPrice    Int       @map("total_price")
+  coveredAmount Int       @default(0) @map("covered_amount")
+  payableAmount Int       @default(0) @map("payable_amount")
   
   status        Status    @default(PENDING)
   paymentMethod Payment   @map("payment_method")
   
   startDate     DateTime  @default(now()) @map("start_date")
   endDate       DateTime? @map("end_date")
+  estimatedCompletionAt DateTime? @map("estimated_completion_at")
+  isOverdue     Boolean   @default(false) @map("is_overdue")
 
   business      Business  @relation(fields: [businessId], references: [id])
   customer      Customer? @relation(fields: [customerId], references: [id])
+  customerMembership CustomerMembership? @relation(fields: [customerMembershipId], references: [id])
+  membershipUsageLogs CustomerMembershipUsageLog[]
 }
 
 enum Status {
@@ -97,13 +116,12 @@ enum Payment {
   QRIS
 }
 
-// 5. Tabel Pengaturan Bisnis (Hak Akses & Custom Input Kasir)
+// 5. Tabel Pengaturan Bisnis (Hak Akses, Custom Input Kasir, & Konfigurasi WhatsApp Gateway)
 model BusinessSetting {
   id                    String   @id @default(uuid())
   businessId            String   @unique @map("business_id")
   
-  // Custom Input Kasir (JSON stringfy atau Boolean terpisah)
-  // Kita buat boolean saja untuk MVP Custom Input Kasir
+  // Custom Input Kasir
   requireCustomerName   Boolean  @default(true)
   requireCustomerPhone  Boolean  @default(true)
   requireCustomerAddress Boolean @default(false)
@@ -111,20 +129,114 @@ model BusinessSetting {
   // Pengaturan Hak Akses Staff (JSON stringify list menu yang dibolehkan)
   staffAllowedMenus     String   @db.Text
 
+  // Konfigurasi WhatsApp Gateway (GOWA) per bisnis
+  // Sesuai proposal: integrasi GOWA untuk auto-send nota digital ke pelanggan
+  whatsappEnabled       Boolean  @default(false) @map("whatsapp_enabled")
+  whatsappApiUrl        String?  @map("whatsapp_api_url")    // contoh: http://localhost:3000
+  whatsappUsername      String?  @map("whatsapp_username")   // basic auth GOWA
+  whatsappPassword      String?  @map("whatsapp_password")   // basic auth GOWA (disimpan plaintext, sebaiknya encrypt di production)
+  whatsappSenderName    String?  @map("whatsapp_sender_name") // nama yang muncul pada template
+
+  // Konfigurasi paket membership berbayar (1 paket)
+  membershipPackageName String   @default("Paket Membership") @map("membership_package_name")
+  membershipDurationDays Int     @default(30) @map("membership_duration_days")
+
   business              Business @relation(fields: [businessId], references: [id])
 }
 
-// 6. Tabel Database Pelanggan
+// 6. Tabel Database Pelanggan (dengan sistem Membership/Loyalitas sesuai proposal)
 model Customer {
   id            String   @id @default(uuid())
   businessId    String   @map("business_id")
   name          String
   phone         String?
   address       String?  @db.Text
+
   createdAt     DateTime @default(now()) @map("created_at")
 
   business      Business @relation(fields: [businessId], references: [id])
   transactions  Transaction[]
+  memberships   CustomerMembership[]
   
-  @@unique([businessId, phone]) // Phone unik per bisnis agar gampang dicari
+  @@unique([businessId, phone])
+}
+
+model MembershipPackageTemplate {
+  id           String   @id @default(uuid())
+  businessId   String   @map("business_id")
+  name         String
+  durationDays Int      @default(30) @map("duration_days")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  business     Business  @relation(fields: [businessId], references: [id])
+  quotaItems   MembershipPackageQuotaItem[]
+  customerMemberships CustomerMembership[]
+}
+
+model MembershipPackageQuotaItem {
+  id          String   @id @default(uuid())
+  templateId  String   @map("template_id")
+  serviceId   String   @map("service_id")
+  quotaAmount Float    @default(0) @map("quota_amount")
+  deductionRate Float  @default(1) @map("deduction_rate")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  template    MembershipPackageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  service     Service  @relation(fields: [serviceId], references: [id])
+
+  @@unique([templateId, serviceId])
+}
+
+enum MembershipStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model CustomerMembership {
+  id          String   @id @default(uuid())
+  businessId  String   @map("business_id")
+  customerId  String   @map("customer_id")
+  templateId  String   @map("template_id")
+  startAt     DateTime @map("start_at")
+  endAt       DateTime @map("end_at")
+  status      MembershipStatus @default(ACTIVE)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  template    MembershipPackageTemplate @relation(fields: [templateId], references: [id])
+  balances    CustomerMembershipQuotaBalance[]
+  usageLogs   CustomerMembershipUsageLog[]
+  transactions Transaction[]
+}
+
+model CustomerMembershipQuotaBalance {
+  id                   String   @id @default(uuid())
+  customerMembershipId String   @map("customer_membership_id")
+  serviceId            String   @map("service_id")
+  initialQty           Float    @map("initial_qty")
+  remainingQty         Float    @map("remaining_qty")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  customerMembership   CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
+  service              Service @relation(fields: [serviceId], references: [id])
+
+  @@unique([customerMembershipId, serviceId])
+}
+
+model CustomerMembershipUsageLog {
+  id                   String   @id @default(uuid())
+  businessId           String   @map("business_id")
+  customerMembershipId String   @map("customer_membership_id")
+  transactionId        String   @map("transaction_id")
+  serviceId            String   @map("service_id")
+  usedQty              Float    @map("used_qty")
+  coveredAmount        Int      @map("covered_amount")
+  payableAmount        Int      @map("payable_amount")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  customerMembership   CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
+  transaction          Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  service              Service @relation(fields: [serviceId], references: [id])
 }

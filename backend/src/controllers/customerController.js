@@ -1,19 +1,18 @@
 const prisma = require('../config/prisma');
+const membershipService = require('../services/membershipService');
 
 const getCustomers = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search = '' } = req.query;
+    const { page = 1, limit = 50, search = '', membershipStatus } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const take = parseInt(limit);
 
-    let whereClause = {
-      businessId: req.user.businessId
-    };
+    let whereClause = { businessId: req.user.businessId };
 
     if (search) {
       whereClause.OR = [
         { name: { contains: search } },
-        { phone: { contains: search } }
+        { phone: { contains: search } },
       ];
     }
 
@@ -22,18 +21,70 @@ const getCustomers = async (req, res) => {
         where: whereClause,
         orderBy: { name: 'asc' },
         skip,
-        take
+        take,
+        include: {
+          _count: { select: { transactions: true } },
+          transactions: {
+            select: { startDate: true },
+            orderBy: { startDate: 'desc' },
+            take: 1,
+          },
+          memberships: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              balances: {
+                include: { service: { select: { id: true, name: true, unit: true } } },
+                orderBy: { createdAt: 'asc' },
+              },
+            },
+          },
+        },
       }),
-      prisma.customer.count({ where: whereClause })
+      prisma.customer.count({ where: whereClause }),
     ]);
 
+    const enriched = customers.map((c) => ({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      address: c.address,
+      transactionCount: c._count.transactions,
+      lastTransactionAt: c.transactions[0]?.startDate || null,
+      membership: c.memberships[0]
+        ? {
+            id: c.memberships[0].id,
+            status: c.memberships[0].status,
+            startAt: c.memberships[0].startAt,
+            endAt: c.memberships[0].endAt,
+            isActive: c.memberships[0].status === 'ACTIVE' && new Date(c.memberships[0].endAt) >= new Date(),
+            balances: c.memberships[0].balances.map((b) => ({
+              serviceId: b.serviceId,
+              serviceName: b.service.name,
+              unit: b.service.unit,
+              initialQty: b.initialQty,
+              remainingQty: b.remainingQty,
+            })),
+          }
+        : null,
+      createdAt: c.createdAt,
+    }));
+
+    const filtered = membershipStatus
+      ? enriched.filter((c) => {
+          if (membershipStatus === 'ACTIVE') return c.membership?.isActive;
+          if (membershipStatus === 'NONE') return !c.membership;
+          return true;
+        })
+      : enriched;
+
     res.json({
-      data: customers,
+      data: filtered,
       pagination: {
         totalItems: totalCount,
         currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / take)
-      }
+        totalPages: Math.ceil(totalCount / take),
+      },
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -44,34 +95,76 @@ const createCustomer = async (req, res) => {
   const { name, phone, address } = req.body;
   try {
     const customer = await prisma.customer.upsert({
-      where: { 
+      where: {
         businessId_phone: {
           businessId: req.user.businessId,
-          phone: phone || ''
-        }
+          phone: phone || '',
+        },
       },
       update: { name, address },
       create: {
         businessId: req.user.businessId,
         name,
         phone,
-        address
-      }
+        address,
+      },
     });
     res.status(201).json(customer);
   } catch (error) {
-    // Upsert might fail if phone is null, let's catch it
     try {
       const fallback = await prisma.customer.create({
-        data: {
-          businessId: req.user.businessId,
-          name, phone, address
-        }
+        data: { businessId: req.user.businessId, name, phone, address },
       });
       res.status(201).json(fallback);
-    } catch(e) {
+    } catch (e) {
       res.status(500).json({ error: e.message });
     }
+  }
+};
+
+const createCustomerWithMembership = async (req, res) => {
+  if (req.user.role !== 'OWNER') {
+    return res.status(403).json({ message: 'Hanya OWNER yang dapat menambah membership customer' });
+  }
+  const { name, phone, address, startAt } = req.body;
+  if (!name) return res.status(400).json({ message: 'Nama customer wajib diisi' });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      let customer = null;
+      if (phone) {
+        customer = await tx.customer.upsert({
+          where: {
+            businessId_phone: {
+              businessId: req.user.businessId,
+              phone,
+            },
+          },
+          update: { name, address },
+          create: { businessId: req.user.businessId, name, phone, address },
+        });
+      } else {
+        customer = await tx.customer.create({
+          data: { businessId: req.user.businessId, name, phone: null, address },
+        });
+      }
+
+      const membership = await membershipService.activateCustomerMembership({
+        businessId: req.user.businessId,
+        customerId: customer.id,
+        startAt: startAt ? new Date(startAt) : new Date(),
+        tx,
+      });
+
+      return { customer, membership };
+    });
+
+    res.status(201).json({
+      message: 'Customer baru dan membership berhasil dibuat',
+      ...result,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -81,9 +174,61 @@ const updateCustomer = async (req, res) => {
   try {
     const customer = await prisma.customer.update({
       where: { id, businessId: req.user.businessId },
-      data: { name, phone, address }
+      data: { name, phone, address },
     });
     res.json(customer);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const activateMembership = async (req, res) => {
+  const { id } = req.params;
+  const { startAt } = req.body;
+  if (req.user.role !== 'OWNER') {
+    return res.status(403).json({ message: 'Hanya OWNER yang dapat aktivasi membership' });
+  }
+  try {
+    const customer = await prisma.customer.findFirst({
+      where: { id, businessId: req.user.businessId },
+    });
+    if (!customer) return res.status(404).json({ message: 'Pelanggan tidak ditemukan' });
+
+    const membership = await prisma.$transaction((tx) =>
+      membershipService.activateCustomerMembership({
+        businessId: req.user.businessId,
+        customerId: id,
+        startAt: startAt ? new Date(startAt) : new Date(),
+        tx,
+      })
+    );
+    res.json({ message: 'Membership customer berhasil diaktivasi', membership });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getMembershipUsage = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const membership = await prisma.customerMembership.findFirst({
+      where: { id, businessId: req.user.businessId },
+      include: {
+        usageLogs: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            service: { select: { name: true, unit: true } },
+            transaction: { select: { id: true, customerName: true, startDate: true } },
+          },
+          take: 100,
+        },
+        balances: {
+          include: { service: { select: { name: true, unit: true } } },
+        },
+      },
+    });
+    if (!membership) return res.status(404).json({ error: 'Membership tidak ditemukan' });
+    res.json(membership);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -93,12 +238,20 @@ const deleteCustomer = async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.customer.delete({
-      where: { id, businessId: req.user.businessId }
+      where: { id, businessId: req.user.businessId },
     });
-    res.json({ message: "Pelanggan dihapus" });
+    res.json({ message: 'Pelanggan dihapus' });
   } catch (error) {
-    res.status(500).json({ error: "Gagal menghapus pelanggan, transaksi mungkin masih tertaut." });
+    res.status(500).json({ error: 'Gagal menghapus pelanggan, transaksi mungkin masih tertaut.' });
   }
 };
 
-module.exports = { getCustomers, createCustomer, updateCustomer, deleteCustomer };
+module.exports = {
+  getCustomers,
+  createCustomer,
+  createCustomerWithMembership,
+  updateCustomer,
+  activateMembership,
+  getMembershipUsage,
+  deleteCustomer,
+};

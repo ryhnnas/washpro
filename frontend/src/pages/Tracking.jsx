@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, MapPin, Search, Package, Check, ArrowRight } from 'lucide-react';
+import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone } from 'lucide-react';
 import api from '../lib/axios';
 
 const STATUS_CONFIG = {
@@ -40,12 +40,17 @@ export default function Tracking() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('ALL');
+  const [toast, setToast] = useState(null); // { type, message }
+  const [resending, setResending] = useState(null);
+  const [overdueCount, setOverdueCount] = useState(0);
 
   const fetchTransactions = async () => {
     setLoading(true);
     try {
       const res = await api.get('/transactions?limit=100');
       setTransactions(res.data.data || []);
+      const overdueRes = await api.get('/transactions/overdue');
+      setOverdueCount(overdueRes.data?.total || 0);
     } catch (err) {
       console.error(err);
     }
@@ -56,26 +61,77 @@ export default function Tracking() {
     fetchTransactions();
   }, []);
 
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const handleUpdateStatus = async (id, currentStatus) => {
     const next = NEXT_STATUS[currentStatus];
     if (!next) return;
     try {
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: next } : t));
-      await api.patch(`/transactions/${id}/status`, { status: next });
+      const res = await api.patch(`/transactions/${id}/status`, { status: next });
+      const wa = res.data?.whatsapp;
+      if (wa?.ok) {
+        showToast('success', `Status diperbarui ke ${next} — notifikasi WA terkirim ke pelanggan.`);
+      } else if (wa?.skipped) {
+        showToast('info', `Status diperbarui ke ${next}. (WA dilewati: ${wa.reason})`);
+      } else if (wa?.error) {
+        showToast('warning', `Status diperbarui, namun WA gagal: ${wa.error}`);
+      } else {
+        showToast('success', `Status berhasil diubah ke ${next}.`);
+      }
     } catch (err) {
-      alert("Gagal update status");
+      showToast('error', 'Gagal update status');
       fetchTransactions();
     }
   };
 
-  const filtered = filter === 'ALL' ? transactions : transactions.filter(t => t.status === filter);
+  const handleResend = async (id) => {
+    setResending(id);
+    try {
+      const res = await api.post(`/transactions/${id}/resend-wa`);
+      const wa = res.data?.whatsapp;
+      if (wa?.ok) showToast('success', 'Nota digital berhasil dikirim ulang ke pelanggan.');
+      else if (wa?.skipped) showToast('warning', `Tidak terkirim: ${wa.reason}`);
+      else showToast('error', wa?.error || 'Gagal mengirim WA');
+    } catch (e) {
+      showToast('error', 'Gagal mengirim ulang WA');
+    } finally {
+      setResending(null);
+    }
+  };
+
+  const filtered = filter === 'ALL'
+    ? transactions
+    : filter === 'TERLAMBAT'
+      ? transactions.filter((t) => t.isOverdue)
+      : transactions.filter(t => t.status === filter);
+
+  const toastTone = {
+    success: 'bg-emerald-500',
+    info: 'bg-slate-700',
+    warning: 'bg-amber-500',
+    error: 'bg-rose-500',
+  };
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+      {toast && (
+        <div className={`fixed top-24 right-6 z-[120] px-5 py-3 rounded-2xl text-white font-bold shadow-xl ${toastTone[toast.type] || 'bg-slate-700'} animate-in fade-in slide-in-from-top-2 max-w-md`}>
+          <div className="flex items-center gap-2 text-sm">
+            <MessageCircle size={18}/> {toast.message}
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
            <h1 className="text-3xl font-bold text-primary tracking-tight">Status Pengerjaan</h1>
            <p className="text-slate-500 mt-1 font-medium">Pantau & perbarui status pesanan seketika.</p>
+           {overdueCount > 0 && (
+             <p className="mt-2 text-rose-600 font-bold text-sm">{overdueCount} transaksi melewati estimasi dan belum selesai.</p>
+           )}
         </div>
         <button 
           onClick={fetchTransactions}
@@ -88,7 +144,7 @@ export default function Tracking() {
 
       {/* Filter Tabs */}
       <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
-        {['ALL', 'PENDING', 'PROSES', 'SELESAI', 'DIAMBIL'].map(st => (
+        {['ALL', 'TERLAMBAT', 'PENDING', 'PROSES', 'SELESAI', 'DIAMBIL'].map(st => (
            <button
              key={st}
              onClick={() => setFilter(st)}
@@ -134,9 +190,14 @@ export default function Tracking() {
                  <span className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${config.bg} ${config.color} ${config.border}`}>
                    {t.status}
                  </span>
+                {t.isOverdue && (
+                  <span className="ml-2 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                    TERLAMBAT
+                  </span>
+                )}
               </div>
 
-              <div className="space-y-4 mb-6">
+              <div className="space-y-3 mb-5">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500 font-semibold">Total Tagihan</span>
                   <span className="text-primary font-black">Rp {t.totalPrice.toLocaleString('id-ID')}</span>
@@ -145,22 +206,47 @@ export default function Tracking() {
                   <span className="text-slate-500 font-semibold">Tanggal Masuk</span>
                   <span className="text-primary font-bold">{new Date(t.startDate).toLocaleDateString('id-ID')}</span>
                 </div>
+                {t.estimatedCompletionAt && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 font-semibold">Estimasi Selesai</span>
+                    <span className={`font-bold ${t.isOverdue ? 'text-rose-600' : 'text-primary'}`}>
+                      {new Date(t.estimatedCompletionAt).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                )}
+                {t.customerPhone && (
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 font-semibold flex items-center gap-1.5"><Phone size={12}/> Kontak</span>
+                    <span className="text-primary font-bold">{t.customerPhone}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Action Button */}
-              {NEXT_STATUS[t.status] ? (
-                 <button 
-                   onClick={() => handleUpdateStatus(t.id, t.status)}
-                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary hover:bg-primary-light text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-primary/20 group/btn"
-                 >
-                   Pindahkan ke {NEXT_STATUS[t.status]} 
-                   <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform"/>
-                 </button>
-              ) : (
-                 <div className="w-full flex items-center justify-center gap-2 py-3.5 bg-slate-100 text-slate-500 font-bold rounded-xl border border-slate-200">
-                   <Check size={18}/> Transaksi Selesai Total
-                 </div>
-              )}
+              <div className="space-y-2">
+                {NEXT_STATUS[t.status] ? (
+                   <button
+                     onClick={() => handleUpdateStatus(t.id, t.status)}
+                     className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary hover:bg-primary-light text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-primary/20 group/btn"
+                   >
+                     Pindahkan ke {NEXT_STATUS[t.status]}
+                     <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform"/>
+                   </button>
+                ) : (
+                   <div className="w-full flex items-center justify-center gap-2 py-3.5 bg-slate-100 text-slate-500 font-bold rounded-xl border border-slate-200">
+                     <Check size={18}/> Transaksi Selesai Total
+                   </div>
+                )}
+
+                {t.customerPhone && (
+                  <button
+                    onClick={() => handleResend(t.id)}
+                    disabled={resending === t.id}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 transition-colors text-sm disabled:opacity-50"
+                  >
+                    <MessageCircle size={14}/> {resending === t.id ? 'Mengirim...' : 'Kirim Ulang Nota WA'}
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

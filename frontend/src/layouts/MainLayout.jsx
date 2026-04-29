@@ -47,11 +47,11 @@ export default function MainLayout() {
     if (settings && settings.staffAllowedMenus) {
       try {
         const allowed = JSON.parse(settings.staffAllowedMenus);
-        allowedItems = navItems.filter(item => allowed.includes(item.id) || item.id === 'CUSTOMERS'); 
-        // Staff usually has access to Customers if they can use CASHIER
+        // CASHIER & TRACKING wajib aktif untuk semua staf
+        allowedItems = navItems.filter(item => allowed.includes(item.id) || ['CASHIER', 'TRACKING'].includes(item.id));
       } catch(e) {}
     } else {
-      allowedItems = navItems.filter(item => ["CASHIER", "TRACKING", "CUSTOMERS"].includes(item.id));
+      allowedItems = navItems.filter(item => ['CASHIER', 'TRACKING'].includes(item.id));
     }
   }
 

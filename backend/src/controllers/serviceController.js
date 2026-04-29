@@ -13,7 +13,7 @@ const getServices = async (req, res) => {
 };
 
 const createService = async (req, res) => {
-  const { name, price, type, unit } = req.body;
+  const { name, price, type, unit, estimateValue, estimateUnit } = req.body;
   try {
     const service = await prisma.service.create({
       data: {
@@ -21,7 +21,9 @@ const createService = async (req, res) => {
         name,
         price,
         type,
-        unit
+        unit,
+        estimateValue: estimateValue ? parseInt(estimateValue, 10) : 24,
+        estimateUnit: estimateUnit || 'HOUR',
       }
     });
     res.status(201).json(service);
@@ -32,11 +34,18 @@ const createService = async (req, res) => {
 
 const updateService = async (req, res) => {
   const { id } = req.params;
-  const { name, price, type, unit } = req.body;
+  const { name, price, type, unit, estimateValue, estimateUnit } = req.body;
   try {
     const service = await prisma.service.update({
       where: { id, businessId: req.user.businessId },
-      data: { name, price, type, unit }
+      data: {
+        name,
+        price,
+        type,
+        unit,
+        estimateValue: estimateValue ? parseInt(estimateValue, 10) : undefined,
+        estimateUnit: estimateUnit || undefined,
+      }
     });
     res.json(service);
   } catch (error) {

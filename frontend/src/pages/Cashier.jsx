@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Save, User, Package, Calendar, Search } from 'lucide-react';
+import { Send, Save, User, Package, Calendar, Search, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import api from '../lib/axios';
 
 export default function Cashier() {
@@ -11,8 +11,7 @@ export default function Cashier() {
     customerName: '',
     customerPhone: '',
     customerAddress: '',
-    serviceId: '',
-    weight: '',
+    items: [{ serviceId: '', qty: '' }],
     paymentMethod: 'CASH'
   });
   
@@ -20,7 +19,9 @@ export default function Cashier() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
-  
+  const [feedback, setFeedback] = useState(null); // { type: 'success'|'error'|'warning', message: string }
+  const [membershipPreview, setMembershipPreview] = useState(null);
+
   const suggestionRef = useRef(null);
 
   useEffect(() => {
@@ -58,21 +59,31 @@ export default function Cashier() {
      setShowSuggestions(false);
   };
 
-  const selectedService = services.find(s => s.id === formData.serviceId);
+  const itemRows = formData.items || [];
+  const selectedItems = itemRows
+    .map((row) => {
+      const service = services.find((s) => s.id === row.serviceId);
+      const qty = parseFloat(row.qty);
+      return service && qty > 0 ? { service, qty } : null;
+    })
+    .filter(Boolean);
+  const matchedCustomer = customers.find(
+    (c) =>
+      (formData.customerPhone && c.phone === formData.customerPhone) ||
+      (!formData.customerPhone && c.name?.toLowerCase() === formData.customerName?.toLowerCase())
+  );
 
   useEffect(() => {
-    if (selectedService && formData.weight) {
-      const w = parseFloat(formData.weight);
-      if (!isNaN(w)) setTotalPrice(w * selectedService.price);
-      else setTotalPrice(0);
+    if (selectedItems.length > 0) {
+      setTotalPrice(selectedItems.reduce((sum, item) => sum + item.qty * item.service.price, 0));
 
-      const name = selectedService.name.toLowerCase();
+      const firstName = selectedItems[0].service.name.toLowerCase();
       let d = new Date();
-      if (name.includes('hari')) {
-        const days = parseInt(name.match(/(\d+)\s*hari/)?.[1] || 0);
+      if (firstName.includes('hari')) {
+        const days = parseInt(firstName.match(/(\d+)\s*hari/)?.[1] || 0);
         d.setDate(d.getDate() + days);
-      } else if (name.includes('jam')) {
-        const hours = parseInt(name.match(/(\d+)\s*jam/)?.[1] || 0);
+      } else if (firstName.includes('jam')) {
+        const hours = parseInt(firstName.match(/(\d+)\s*jam/)?.[1] || 0);
         d.setHours(d.getHours() + hours);
       } else {
         d.setDate(d.getDate() + 1); // default 1 hari
@@ -82,33 +93,111 @@ export default function Cashier() {
       setTotalPrice(0);
       setEndDate('');
     }
-  }, [formData.serviceId, formData.weight, selectedService]);
+  }, [JSON.stringify(formData.items), JSON.stringify(services)]);
+
+  useEffect(() => {
+    if (!selectedItems.length || !matchedCustomer?.membership?.isActive) {
+      setMembershipPreview(null);
+      return;
+    }
+    const itemPreview = selectedItems.map(({ service, qty }) => {
+      const fullPrice = Math.round(qty * service.price);
+      const balance = matchedCustomer.membership.balances?.find((b) => b.serviceId === service.id);
+      const pkgItem = settings?.membershipPackage?.items?.find((i) => i.serviceId === service.id);
+      const rate = Number(pkgItem?.deductionRate || 1);
+      if (!balance || rate <= 0) {
+        return {
+          serviceName: service.name,
+          unit: service.unit,
+          eligible: false,
+          reason: 'Tidak termasuk paket',
+          coveredAmount: 0,
+          payableAmount: fullPrice,
+          consumedQuota: 0,
+          remainingBefore: Number(balance?.remainingQty || 0),
+        };
+      }
+      const requiredQuota = qty * rate;
+      const consumedQuota = Math.min(requiredQuota, Number(balance.remainingQty || 0));
+      const ratio = requiredQuota > 0 ? consumedQuota / requiredQuota : 0;
+      const coveredAmount = Math.round(fullPrice * ratio);
+      return {
+        serviceName: service.name,
+        unit: service.unit,
+        eligible: consumedQuota > 0,
+        reason: consumedQuota > 0 ? '' : 'Kuota habis',
+        coveredAmount,
+        payableAmount: Math.max(0, fullPrice - coveredAmount),
+        consumedQuota,
+        remainingBefore: Number(balance.remainingQty || 0),
+      };
+    });
+    const coveredAmount = itemPreview.reduce((sum, item) => sum + item.coveredAmount, 0);
+    const payableAmount = itemPreview.reduce((sum, item) => sum + item.payableAmount, 0);
+    setMembershipPreview({
+      hasMembership: true,
+      eligible: itemPreview.some((i) => i.eligible),
+      reason: itemPreview.some((i) => i.eligible) ? '' : 'Semua item tidak tercakup membership.',
+      coveredAmount,
+      payableAmount,
+      items: itemPreview,
+    });
+  }, [JSON.stringify(selectedItems), matchedCustomer, settings]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedService || totalPrice <= 0) return alert("Pilih layanan dan masukkan jumlah!");
+    if (!selectedItems.length || totalPrice <= 0) return alert("Tambah minimal 1 layanan dengan jumlah valid.");
     setLoading(true);
+    setFeedback(null);
     try {
       const payload = {
-        ...formData,
-        serviceName: selectedService.name,
-        totalPrice
+        customerName: formData.customerName,
+        customerPhone: formData.customerPhone,
+        customerAddress: formData.customerAddress,
+        paymentMethod: formData.paymentMethod,
+        items: selectedItems.map(({ service, qty }) => ({
+          serviceId: service.id,
+          serviceName: service.name,
+          qty,
+        })),
+        totalPrice,
       };
-      await api.post('/transactions', payload);
-      alert("Transaksi Disimpan!");
+      const res = await api.post('/transactions', payload);
+      const wa = res.data?.whatsapp;
+      const bill = res.data?.membershipBreakdown;
+
+      if (wa?.ok) {
+        setFeedback({ type: 'success', message: 'Transaksi tersimpan & nota digital telah dikirim otomatis ke WhatsApp pelanggan.' });
+      } else if (wa?.skipped) {
+        const reasonMap = {
+          NO_PHONE: 'Pelanggan tidak memiliki nomor HP.',
+          WA_DISABLED: 'WhatsApp Gateway dinonaktifkan di Pengaturan.',
+          NO_API_URL: 'URL Gateway belum dikonfigurasi.',
+        };
+        setFeedback({ type: 'warning', message: `Transaksi tersimpan. Auto-kirim WA dilewati: ${reasonMap[wa.reason] || wa.reason}.` });
+      } else if (wa?.error) {
+        setFeedback({ type: 'error', message: `Transaksi tersimpan tapi WA gagal terkirim: ${wa.error}` });
+      } else {
+        setFeedback({ type: 'success', message: 'Transaksi berhasil disimpan.' });
+      }
+      if (bill?.activeMembershipId) {
+        setFeedback({
+          type: 'success',
+          message: `Transaksi tersimpan. Membership digunakan (cover Rp ${Number(bill.coveredAmount || 0).toLocaleString('id-ID')}) dan dibayar Rp ${Number(bill.payableAmount || 0).toLocaleString('id-ID')}.`,
+        });
+      }
+
       setFormData({
         customerName: '',
         customerPhone: '',
         customerAddress: '',
-        serviceId: '',
-        weight: '',
+        items: [{ serviceId: '', qty: '' }],
         paymentMethod: 'CASH'
       });
-      // Refresh customers to get new ones
       const resCust = await api.get('/customers?limit=100');
       setCustomers(resCust.data.data || []);
     } catch (err) {
-      alert("Gagal menyimpan transaksi");
+      setFeedback({ type: 'error', message: err.response?.data?.error || 'Gagal menyimpan transaksi' });
     } finally {
       setLoading(false);
     }
@@ -119,15 +208,40 @@ export default function Cashier() {
     let phone = formData.customerPhone;
     if (phone.startsWith('0')) phone = '62' + phone.slice(1);
 
-    const msg = `Halo *Kak ${formData.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di WashPro.\n\n*Detail Order:*\nKet: ${selectedService?.name}\nQty: ${formData.weight} ${selectedService?.unit}\n*Total Biaya: Rp ${totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${endDate || 'Segera'}\n\nTerima kasih!`;
+    const lines = selectedItems
+      .map(({ service, qty }, i) => `${i + 1}. ${service.name} - ${qty} ${service.unit}`)
+      .join('\n');
+    const msg = `Halo *Kak ${formData.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di WashPro.\n\n*Detail Order:*\n${lines}\n*Total Biaya: Rp ${totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${endDate || 'Segera'}\n\nTerima kasih!`;
     const encoded = encodeURIComponent(msg);
     window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
   };
 
+  const waEnabled = settings?.whatsappEnabled;
+
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <h1 className="text-3xl font-bold text-primary mb-2 tracking-tight">Terminal Kasir</h1>
-      <p className="text-slate-500 mb-8 font-medium">Buat transaksi baru dan cetak tagihan pelanggan.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-primary mb-2 tracking-tight">Terminal Kasir</h1>
+          <p className="text-slate-500 font-medium">Buat transaksi baru — nota dikirim otomatis ke WhatsApp pelanggan.</p>
+        </div>
+        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold w-max ${waEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+          <MessageCircle size={16}/>
+          {waEnabled ? 'WhatsApp Gateway Aktif' : 'WhatsApp Gateway Nonaktif'}
+        </div>
+      </div>
+
+      {feedback && (
+        <div className={`mb-6 flex items-start gap-3 p-4 rounded-2xl border animate-in fade-in slide-in-from-top-2 ${
+          feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+          feedback.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
+          'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          {feedback.type === 'success' ? <CheckCircle2 size={20} className="shrink-0 mt-0.5"/> : <AlertTriangle size={20} className="shrink-0 mt-0.5"/>}
+          <div className="text-sm font-bold">{feedback.message}</div>
+          <button onClick={() => setFeedback(null)} className="ml-auto text-current/60 hover:text-current"><span className="sr-only">Tutup</span>×</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Kolom 1 Kiri: Form Input */}
@@ -204,23 +318,71 @@ export default function Cashier() {
              </div>
 
              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-               <div className="md:col-span-2">
-                 <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Pilih Paket</label>
-                 <div className="relative">
-                   <select required className="premium-input bg-secondary appearance-none truncate pr-10" value={formData.serviceId} onChange={e => setFormData({...formData, serviceId: e.target.value})}>
-                     <option value="" disabled>Pilih Layanan Laundry</option>
-                     {services.map(s => <option key={s.id} value={s.id}>{s.name} - Rp{s.price.toLocaleString()}/{s.unit}</option>)}
-                   </select>
-                 </div>
+               <div className="md:col-span-3 space-y-3">
+                 {itemRows.map((row, idx) => {
+                   const svc = services.find((s) => s.id === row.serviceId);
+                   return (
+                     <div key={idx} className="grid grid-cols-12 gap-3 items-end">
+                       <div className="col-span-7">
+                         <label className="block text-xs font-bold text-slate-500 mb-1">Layanan #{idx + 1}</label>
+                         <select
+                           required
+                           className="premium-input bg-secondary appearance-none truncate pr-10"
+                           value={row.serviceId}
+                           onChange={(e) => {
+                             const next = [...itemRows];
+                             next[idx] = { ...next[idx], serviceId: e.target.value };
+                             setFormData({ ...formData, items: next });
+                           }}
+                         >
+                           <option value="" disabled>Pilih Layanan Laundry</option>
+                           {services.map((s) => (
+                             <option key={s.id} value={s.id}>{s.name} - Rp{s.price.toLocaleString()}/{s.unit}</option>
+                           ))}
+                         </select>
+                       </div>
+                       <div className="col-span-3">
+                         <label className="block text-xs font-bold text-slate-500 mb-1">{svc?.type === 'SATUAN' ? 'Qty' : 'Kg'}</label>
+                         <input
+                           placeholder="0"
+                           required
+                           type="number"
+                           step="0.01"
+                           min="0.1"
+                           className="premium-input bg-secondary font-black"
+                           value={row.qty}
+                           onChange={(e) => {
+                             const next = [...itemRows];
+                             next[idx] = { ...next[idx], qty: e.target.value };
+                             setFormData({ ...formData, items: next });
+                           }}
+                         />
+                       </div>
+                       <div className="col-span-2 flex gap-2">
+                         <button
+                           type="button"
+                           className="w-full h-12 rounded-xl border border-slate-300 bg-white text-slate-500 font-black"
+                           onClick={() => {
+                             if (itemRows.length === 1) return;
+                             setFormData({ ...formData, items: itemRows.filter((_, i) => i !== idx) });
+                           }}
+                         >
+                           -
+                         </button>
+                         {idx === itemRows.length - 1 && (
+                           <button
+                             type="button"
+                             className="w-full h-12 rounded-xl border border-primary bg-primary text-white font-black"
+                             onClick={() => setFormData({ ...formData, items: [...itemRows, { serviceId: '', qty: '' }] })}
+                           >
+                             +
+                           </button>
+                         )}
+                       </div>
+                     </div>
+                   );
+                 })}
                </div>
-
-               <div>
-                 <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">
-                   {selectedService?.type === 'SATUAN' ? 'Jumlah (Pcs)' : 'Berat (Kg)'}
-                 </label>
-                 <input placeholder="0" required type="number" step="0.01" min="0.1" className="premium-input bg-secondary text-2xl font-black font-mono h-[58px]" value={formData.weight} onChange={e => setFormData({...formData, weight: e.target.value})} />
-               </div>
-               
              </div>
           </div>
         </form>
@@ -240,19 +402,18 @@ export default function Cashier() {
                  </div>
                  <div className="flex justify-between items-start">
                     <span className="text-slate-500 font-bold">Layanan</span>
-                    <span className="text-primary text-right font-black">{selectedService?.name || '-'}</span>
+                    <span className="text-primary text-right font-black">{selectedItems.length} item</span>
                  </div>
-                 <div className="flex justify-between items-start">
-                    <span className="text-slate-500 font-bold">Tarif Dasar</span>
-                    <span className="text-primary text-right font-bold text-sm">Rp {selectedService?.price.toLocaleString() || '0'}</span>
-                 </div>
-                 <div className="flex justify-between items-start">
-                    <span className="text-slate-500 font-bold">Qty/Muatan</span>
-                    <span className="text-primary text-right font-black text-lg bg-secondary px-2 rounded-md">{formData.weight ? `${formData.weight} ${selectedService?.unit || ''}` : '-'}</span>
-                 </div>
+                 {selectedItems.slice(0, 3).map(({ service, qty }, idx) => (
+                   <div key={idx} className="flex justify-between items-start">
+                      <span className="text-slate-500 font-bold text-xs">{service.name}</span>
+                      <span className="text-primary text-right font-bold text-xs">{qty} {service.unit}</span>
+                   </div>
+                 ))}
+                 {selectedItems.length > 3 && <div className="text-xs text-slate-400">+{selectedItems.length - 3} item lain</div>}
                  
                  {endDate && (
-                   <div className="pt-4 mt-6 border-t border-slate-200 flex gap-3 text-primary-light items-start bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-inner">
+                  <div className="pt-4 mt-6 flex gap-3 text-primary-light items-start bg-blue-50 p-4 rounded-xl border-blue-100 border shadow-inner">
                       <Calendar size={24} className="shrink-0 mt-1" />
                       <div className="text-sm">
                         <span className="block font-bold mb-0.5 text-slate-500">Estimasi Selesai:</span>
@@ -271,6 +432,21 @@ export default function Cashier() {
               </div>
 
               <div className="mt-6 pt-6 border-t-[3px] border-solid border-slate-200">
+                 {membershipPreview?.hasMembership && (
+                   <div className="mb-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-800">
+                     {membershipPreview.eligible ? (
+                      <>
+                        <div className="font-bold">Membership aktif terdeteksi</div>
+                        <div>Cover: <span className="font-bold">Rp {membershipPreview.coveredAmount.toLocaleString('id-ID')}</span> | Bayar: <span className="font-bold">Rp {membershipPreview.payableAmount.toLocaleString('id-ID')}</span></div>
+                        {membershipPreview.items?.slice(0, 3).map((item, idx) => (
+                          <div key={idx}>{item.serviceName}: cover Rp {Number(item.coveredAmount || 0).toLocaleString('id-ID')} | bayar Rp {Number(item.payableAmount || 0).toLocaleString('id-ID')}</div>
+                        ))}
+                      </>
+                     ) : (
+                      <div className="font-bold">{membershipPreview.reason}</div>
+                     )}
+                   </div>
+                 )}
                  <div className="flex justify-between items-center whitespace-nowrap">
                     <span className="text-slate-500 font-bold mb-1">Total Tagihan</span>
                     <span className="text-3xl lg:text-4xl font-black text-primary tracking-tighter">
@@ -291,13 +467,14 @@ export default function Cashier() {
                 <Save size={20} className="group-hover:scale-110 transition-transform" /> {loading ? 'Menyimpan...' : 'Bayar'}
               </button>
               
-              <button 
+              <button
                 type="button"
                 onClick={openWhatsApp}
                 disabled={totalPrice <= 0 || !formData.customerPhone}
+                title={waEnabled ? 'Gateway aktif — nota otomatis terkirim saat Anda Bayar. Tombol ini untuk preview manual.' : 'Buka WhatsApp Web manual (gateway nonaktif)'}
                 className="h-[60px] flex items-center justify-center gap-2 px-6 py-4 bg-[#25D366] hover:bg-[#1ebd59] shadow-lg shadow-[#25D366]/25 hover:shadow-[#25D366]/40 text-white font-extrabold rounded-2xl transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group"
               >
-                <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /> WhatsApp
+                <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /> {waEnabled ? 'Preview WA' : 'Manual WA'}
               </button>
            </div>
         </div>

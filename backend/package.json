@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "db:seed": "prisma db seed"
   },
   "keywords": [],
   "author": "",
@@ -21,5 +22,8 @@
     "@prisma/client": "^6.19.3",
     "nodemon": "^3.1.14",
     "prisma": "^6.19.3"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }
