@@ -5,7 +5,5 @@ const { getSettings, updateSettings, testWhatsapp, sendTestMessage } = require('
 
 router.get('/', authMiddleware, getSettings);
 router.put('/', authMiddleware, updateSettings);
-router.get('/whatsapp/test', authMiddleware, testWhatsapp);
-router.post('/whatsapp/test-message', authMiddleware, sendTestMessage);
 
 module.exports = router;

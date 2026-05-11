@@ -2,6 +2,52 @@ import { useState, useEffect } from 'react';
 import { Save, Sliders, Check, MessageCircle, CheckCircle2, AlertTriangle, Crown, Server, Send, Plus, Trash2 } from 'lucide-react';
 import api from '../lib/axios';
 
+const DEFAULT_TEMPLATES = {
+  RECEIPT: `*{{businessName}}*
+Nota Digital — #{{orderId}}
+{{separator}}
+Halo *{{customerName}}*,
+Terima kasih telah mempercayakan cucian Anda.
+
+*Detail Pesanan*
+{{detailItems}}
+
+Bayar   : {{paymentMethod}}
+Total   : *{{totalPrice}}*
+Status  : {{status}}
+Waktu   : {{date}}
+{{separator}}
+Simpan pesan ini sebagai bukti transaksi.
+_Nota dikirim otomatis oleh sistem._`,
+  PROSES: `*{{businessName}}*
+Update Status #{{orderId}}
+{{separator}}
+Halo *{{customerName}}*,
+
+Pesanan Anda *{{serviceName}}* sekarang berstatus:
+*{{statusLabel}}*
+
+Mohon ditunggu ya, kami sedang mengerjakannya dengan sepenuh hati.`,
+  SELESAI: `*{{businessName}}*
+Update Status #{{orderId}}
+{{separator}}
+Halo *{{customerName}}*,
+
+Pesanan Anda *{{serviceName}}* sekarang berstatus:
+*{{statusLabel}}*
+
+Silakan datang ke gerai untuk pengambilan. Terima kasih!`,
+  DIAMBIL: `*{{businessName}}*
+Update Status #{{orderId}}
+{{separator}}
+Halo *{{customerName}}*,
+
+Pesanan Anda *{{serviceName}}* sekarang berstatus:
+*{{statusLabel}}*
+
+Terima kasih telah menggunakan jasa kami. Sampai jumpa kembali!`,
+};
+
 export default function Settings() {
   const [settings, setSettings] = useState({
     requireCustomerName: true,
@@ -16,15 +62,13 @@ export default function Settings() {
     membershipPackageName: 'Paket Membership',
     membershipDurationDays: 30,
     membershipPackageItems: [],
+    whatsappTemplates: { ...DEFAULT_TEMPLATES },
   });
+  const [activeWaTab, setActiveWaTab] = useState('RECEIPT');
+
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
-
-  // WA Test
-  const [waTestPhone, setWaTestPhone] = useState('');
-  const [waTestStatus, setWaTestStatus] = useState(null);
-  const [testing, setTesting] = useState(false);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -36,11 +80,22 @@ export default function Settings() {
         let staffMenus = ["CASHIER", "TRACKING"];
         try { staffMenus = JSON.parse(res.data.staffAllowedMenus || '[]'); } catch(e) {}
         const packageItems = res.data.membershipPackage?.items || [];
+        
+        // Gabungkan template dari DB dengan default jika ada yang kosong
+        const dbTemplates = res.data.whatsappTemplates || {};
+        const mergedTemplates = {};
+        Object.keys(DEFAULT_TEMPLATES).forEach(key => {
+          mergedTemplates[key] = dbTemplates[key] || DEFAULT_TEMPLATES[key];
+        });
+
         setSettings(prev => ({
           ...prev,
           ...res.data,
           staffAllowedMenus: staffMenus,
+          whatsappTemplates: mergedTemplates,
           membershipPackageName: res.data.membershipPackage?.name || prev.membershipPackageName,
+
+
           membershipDurationDays: res.data.membershipPackage?.durationDays || prev.membershipDurationDays,
           membershipPackageItems: packageItems.map((i) => ({
             serviceId: i.serviceId,
@@ -49,11 +104,11 @@ export default function Settings() {
             quotaAmount: i.quotaAmount,
             deductionRate: i.deductionRate,
           })),
-          whatsappPassword: '',
         }));
       }
     }).catch(console.error);
   }, []);
+
 
   const handleMenuToggle = (menuId) => {
     setSettings(prev => {
@@ -75,8 +130,18 @@ export default function Settings() {
           deductionRate: Number(i.deductionRate) || 1,
         })),
       };
-      await api.put('/settings', payload);
+      const res = await api.put('/settings', payload);
+      
+      // Update state with returned templates to ensure sync
+      if (res.data.whatsappTemplates) {
+        setSettings(prev => ({
+          ...prev,
+          whatsappTemplates: res.data.whatsappTemplates
+        }));
+      }
+
       setSaved(true);
+
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       alert(err.response?.data?.message || "Gagal menyimpan");
@@ -115,31 +180,6 @@ export default function Settings() {
       ...prev,
       membershipPackageItems: prev.membershipPackageItems.filter((_, i) => i !== idx),
     }));
-  };
-
-  const handleTestConnection = async () => {
-    setTesting(true);
-    setWaTestStatus(null);
-    try {
-      const res = await api.get('/settings/whatsapp/test');
-      setWaTestStatus(res.data);
-    } catch (err) {
-      setWaTestStatus({ ok: false, error: err.response?.data?.error || err.message });
-    }
-    setTesting(false);
-  };
-
-  const handleSendTestMessage = async () => {
-    if (!waTestPhone) return alert('Masukkan nomor HP terlebih dulu');
-    setTesting(true);
-    setWaTestStatus(null);
-    try {
-      const res = await api.post('/settings/whatsapp/test-message', { phone: waTestPhone });
-      setWaTestStatus(res.data);
-    } catch (err) {
-      setWaTestStatus({ ok: false, error: err.response?.data?.error || err.message });
-    }
-    setTesting(false);
   };
 
   return (
@@ -183,87 +223,84 @@ export default function Settings() {
         </section>
 
         {/* WHATSAPP GATEWAY (GOWA) */}
+        {user.role === 'OWNER' && <WhatsAppSettings />}
+
+        {/* CUSTOM TEMPLATE WA */}
         {user.role === 'OWNER' && (
           <section className="glass-card bg-white p-6 md:p-8 rounded-3xl border-t-[6px] border-t-emerald-500 relative overflow-hidden shadow-sm hover:shadow-lg transition-shadow lg:col-span-2">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="flex items-center gap-4 mb-8 border-b border-slate-100 pb-4">
-              <div className="p-3 bg-emerald-100 rounded-xl text-emerald-600"><MessageCircle size={24}/></div>
-              <div>
-                <h2 className="text-xl font-black text-primary">WhatsApp Gateway (GOWA)</h2>
-                <p className="text-xs text-slate-500 font-bold">Aktifkan auto-kirim nota digital ke pelanggan</p>
-              </div>
+            <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-4">
+               <div className="p-3 bg-emerald-100 rounded-xl text-emerald-600"><Send size={24}/></div>
+               <div>
+                 <h2 className="text-xl font-black text-primary">Template Resi WhatsApp</h2>
+                 <p className="text-xs text-slate-500 font-bold">Kustomisasi format pesan nota yang dikirim ke pelanggan</p>
+               </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 mb-6 bg-slate-100 p-1.5 rounded-2xl w-max">
+              {Object.keys(DEFAULT_TEMPLATES).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveWaTab(tab)}
+                  className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${activeWaTab === tab ? 'bg-white text-emerald-600 shadow-sm scale-105' : 'text-slate-500 hover:text-primary'}`}
+                >
+                  {tab === 'RECEIPT' ? 'BARU / RESI' : tab}
+                </button>
+              ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-              <div className="space-y-4">
-                <ToggleOption
-                  label="Aktifkan Gateway"
-                  desc="Nota & update status terkirim otomatis via GOWA"
-                  checked={settings.whatsappEnabled}
-                  onChange={(v) => setSettings({...settings, whatsappEnabled: v})}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Isi Pesan Template ({activeWaTab})</label>
+                <textarea 
+                  rows={12}
+                  className="w-full p-4 bg-secondary border border-slate-200 rounded-2xl outline-none text-primary font-medium font-mono text-sm resize-none focus:border-emerald-400 transition-colors"
+                  placeholder={`Masukkan template untuk status ${activeWaTab}...`}
+                  value={settings.whatsappTemplates[activeWaTab] || ''}
+                  onChange={(e) => setSettings({
+                    ...settings, 
+                    whatsappTemplates: { ...settings.whatsappTemplates, [activeWaTab]: e.target.value }
+                  })}
                 />
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1 flex items-center gap-1.5"><Server size={12}/> URL API GOWA</label>
-                  <input value={settings.whatsappApiUrl || ''} onChange={e => setSettings({...settings, whatsappApiUrl: e.target.value})} placeholder="http://localhost:3000" className="premium-input bg-secondary text-sm"/>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">Nama Pengirim</label>
-                  <input value={settings.whatsappSenderName || ''} onChange={e => setSettings({...settings, whatsappSenderName: e.target.value})} placeholder="Nama yang muncul di template" className="premium-input bg-secondary text-sm"/>
-                </div>
+                <p className="mt-2 text-[10px] text-slate-400 font-bold uppercase italic">*Tag yang tersedia menyesuaikan konteks pesan.</p>
               </div>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">Username (Basic Auth)</label>
-                    <input value={settings.whatsappUsername || ''} onChange={e => setSettings({...settings, whatsappUsername: e.target.value})} placeholder="admin" className="premium-input bg-secondary text-sm"/>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 ml-1">Password</label>
-                    <input type="password" value={settings.whatsappPassword || ''} onChange={e => setSettings({...settings, whatsappPassword: e.target.value})} placeholder={settings.whatsappPasswordSet ? '•••••••• (tersimpan)' : 'admin'} className="premium-input bg-secondary text-sm"/>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                  <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5"><Send size={12}/> Uji Coba</p>
-                  <div className="flex gap-2">
-                    <input
-                      value={waTestPhone}
-                      onChange={(e) => setWaTestPhone(e.target.value)}
-                      placeholder="08xxx (kirim pesan tes)"
-                      className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm outline-none focus:border-primary text-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSendTestMessage}
-                      disabled={testing || !settings.whatsappEnabled}
-                      className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-                    >
-                      Kirim Tes
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleTestConnection}
-                    disabled={testing}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-xl hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                  >
-                    {testing ? 'Memeriksa...' : 'Periksa Koneksi GOWA'}
-                  </button>
-
-                  {waTestStatus && (
-                    <div className={`flex items-start gap-2 p-3 rounded-lg text-xs font-bold ${waTestStatus.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {waTestStatus.ok ? <CheckCircle2 size={14} className="mt-0.5"/> : <AlertTriangle size={14} className="mt-0.5"/>}
-                      <span>{waTestStatus.ok ? 'OK — gateway terhubung / pesan terkirim.' : `Gagal: ${waTestStatus.error || waTestStatus.reason || 'Unknown'}`}</span>
-                    </div>
+              
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <h3 className="text-xs font-black text-primary mb-3 uppercase tracking-wider">Placeholder Tersedia</h3>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 thin-scrollbar">
+                  <PlaceholderBadge tag="{{businessName}}" label="Nama Bisnis" />
+                  <PlaceholderBadge tag="{{customerName}}" label="Nama Pelanggan" />
+                  <PlaceholderBadge tag="{{orderId}}" label="ID Pesanan" />
+                  <PlaceholderBadge tag="{{separator}}" label="Garis Pemisah (---)" />
+                  
+                  {activeWaTab === 'RECEIPT' ? (
+                    <>
+                      <PlaceholderBadge tag="{{detailItems}}" label="Rincian Layanan" />
+                      <PlaceholderBadge tag="{{totalPrice}}" label="Total Harga" />
+                      <PlaceholderBadge tag="{{paymentMethod}}" label="Metode Bayar" />
+                      <PlaceholderBadge tag="{{status}}" label="Status Transaksi" />
+                      <PlaceholderBadge tag="{{date}}" label="Tanggal & Waktu" />
+                    </>
+                  ) : (
+                    <>
+                      <PlaceholderBadge tag="{{serviceName}}" label="Nama Layanan Utama" />
+                      <PlaceholderBadge tag="{{statusLabel}}" label="Label Status (Indo)" />
+                    </>
                   )}
                 </div>
+                <div className="mt-4 p-2 bg-amber-50 rounded-lg border border-amber-100">
+                   <p className="text-[10px] text-amber-700 leading-relaxed font-medium">
+                     Klik tab di atas untuk mengatur pesan otomatis saat status cucian berubah.
+                   </p>
+                </div>
               </div>
             </div>
+
           </section>
         )}
 
         {/* MEMBERSHIP PACKAGE */}
+
         {user.role === 'OWNER' && (
           <section className="glass-card bg-white p-6 md:p-8 rounded-3xl border-t-[6px] border-t-tertiary relative overflow-hidden shadow-sm hover:shadow-lg transition-shadow lg:col-span-2">
             <div className="absolute top-0 right-0 w-32 h-32 bg-tertiary/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -348,4 +385,191 @@ const ToggleOption = ({ label, desc, checked, onChange }) => (
   </label>
 );
 
-// TierInput deprecated: membership sekarang berbasis paket kuota.
+const WhatsAppSettings = () => {
+  const [waStatus, setWaStatus] = useState(null);
+  const [qrCode, setQrCode] = useState(null);
+  const [pairingCode, setPairingCode] = useState(null);
+  const [phoneToPair, setPhoneToPair] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [waTestPhone, setWaTestPhone] = useState('');
+  const [testResult, setTestResult] = useState(null);
+
+  const fetchStatus = async () => {
+    try {
+      const res = await api.get('/whatsapp/status');
+      setWaStatus(res.data);
+      if (res.data?.status === 'connected') {
+        setQrCode(null);
+        setPairingCode(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleQR = async () => {
+    setLoading(true);
+    try {
+      const res = await api.post('/whatsapp/connect/qr');
+      setQrCode(res.data.qr_code);
+      setPairingCode(null);
+    } catch (e) {
+      alert(e.response?.data?.error || "Gagal request QR");
+    }
+    setLoading(false);
+  };
+
+  const handlePairing = async () => {
+    if (!phoneToPair) return alert("Masukkan nomor HP");
+    setLoading(true);
+    try {
+      const res = await api.post('/whatsapp/connect/pairing', { phoneNumber: phoneToPair });
+      setPairingCode(res.data.pairing_code);
+      setQrCode(null);
+    } catch (e) {
+      alert(e.response?.data?.error || "Gagal request Pairing");
+    }
+    setLoading(false);
+  };
+
+  const handleDisconnect = async () => {
+    if (!window.confirm("Yakin ingin memutuskan koneksi WhatsApp?")) return;
+    setLoading(true);
+    try {
+      await api.post('/whatsapp/disconnect');
+      setWaStatus(prev => ({ ...prev, status: 'disconnected' }));
+      await fetchStatus();
+    } catch (e) {
+      alert("Gagal disconnect");
+    }
+    setLoading(false);
+  };
+
+  const handleTest = async () => {
+    if (!waTestPhone) return alert("Nomor HP wajib diisi");
+    setLoading(true);
+    try {
+      const res = await api.post('/whatsapp/test-message', { phone: waTestPhone });
+      setTestResult(res.data);
+    } catch (e) {
+      setTestResult({ ok: false, error: e.response?.data?.error || e.message });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <section className="glass-card bg-white p-6 md:p-8 rounded-3xl border-t-[6px] border-t-emerald-500 relative overflow-hidden shadow-sm hover:shadow-lg transition-shadow lg:col-span-2">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="flex items-center gap-4 mb-8 border-b border-slate-100 pb-4">
+        <div className="p-3 bg-emerald-100 rounded-xl text-emerald-600"><MessageCircle size={24}/></div>
+        <div>
+          <h2 className="text-xl font-black text-primary">WhatsApp Gateway</h2>
+          <p className="text-xs text-slate-500 font-bold">Kirim nota digital otomatis ke pelanggan (Multi-Device)</p>
+        </div>
+      </div>
+
+      <div className="relative z-10">
+        <div className="mb-6 flex items-center gap-3">
+          <span className="font-bold text-slate-600 text-sm">Status:</span>
+          {waStatus?.status === 'connected' ? (
+             <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold flex items-center gap-1"><CheckCircle2 size={14}/> Terhubung</span>
+          ) : waStatus?.status === 'connecting' ? (
+             <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold flex items-center gap-1"><AlertTriangle size={14}/> Menunggu Scan/Pairing</span>
+          ) : (
+             <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-bold flex items-center gap-1"><AlertTriangle size={14}/> Terputus</span>
+          )}
+        </div>
+
+        {waStatus?.status === 'connected' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <p className="text-sm font-semibold text-slate-600">Terhubung ke: <span className="font-bold text-primary">{waStatus.detail?.push_name || waStatus.detail?.device_id || 'WhatsApp Device'}</span></p>
+              <button onClick={handleDisconnect} disabled={loading} className="px-4 py-2 bg-rose-100 text-rose-600 hover:bg-rose-200 text-sm font-bold rounded-xl transition-colors">
+                Putuskan Koneksi
+              </button>
+            </div>
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+               <p className="text-xs font-bold text-slate-500 flex items-center gap-1.5"><Send size={12}/> Uji Coba Pengiriman</p>
+               <div className="flex gap-2">
+                 <input
+                   value={waTestPhone}
+                   onChange={(e) => setWaTestPhone(e.target.value)}
+                   placeholder="08xxx (kirim tes)"
+                   className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm outline-none focus:border-primary text-primary"
+                 />
+                 <button
+                   onClick={handleTest}
+                   disabled={loading}
+                   className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                 >
+                   Kirim Tes
+                 </button>
+               </div>
+               {testResult && (
+                 <div className={`flex items-start gap-2 p-3 rounded-lg text-xs font-bold ${testResult.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                   {testResult.ok ? <CheckCircle2 size={14} className="mt-0.5"/> : <AlertTriangle size={14} className="mt-0.5"/>}
+                   <span>{testResult.ok ? 'Pesan berhasil dikirim.' : `Gagal: ${testResult.error || testResult.reason || 'Unknown'}`}</span>
+                 </div>
+               )}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Opsi QR */}
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center gap-4 text-center">
+              <h3 className="font-bold text-slate-700 text-sm">Hubungkan via QR Code</h3>
+              <p className="text-xs text-slate-500 font-medium">Buka WhatsApp &gt; Perangkat Taut &gt; Tautkan Perangkat</p>
+              {qrCode ? (
+                <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-200">
+                  <img src={qrCode.startsWith('http') || qrCode.startsWith('data:image') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="w-48 h-48" />
+                </div>
+              ) : (
+                <button onClick={handleQR} disabled={loading} className="mt-4 px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary-hover transition-colors">
+                  Tampilkan QR Code
+                </button>
+              )}
+            </div>
+            
+            {/* Opsi Pairing Code */}
+            <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col items-center gap-4 text-center">
+              <h3 className="font-bold text-slate-700 text-sm">Hubungkan via Nomor HP</h3>
+              <p className="text-xs text-slate-500 font-medium">Gunakan metode ini jika Anda tidak bisa scan QR</p>
+              {pairingCode ? (
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-200 w-full">
+                  <p className="text-xs font-bold text-slate-500 mb-2">Kode Tautan Anda:</p>
+                  <p className="text-3xl font-black text-primary tracking-widest">{pairingCode}</p>
+                </div>
+              ) : (
+                <div className="w-full space-y-3 mt-4">
+                  <input
+                    value={phoneToPair}
+                    onChange={(e) => setPhoneToPair(e.target.value)}
+                    placeholder="Contoh: 08123456789"
+                    className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm outline-none focus:border-primary text-primary text-center font-bold"
+                  />
+                  <button onClick={handlePairing} disabled={loading} className="w-full px-5 py-2.5 bg-tertiary text-primary text-sm font-bold rounded-xl hover:bg-tertiary-hover transition-colors">
+                    Dapatkan Kode
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
+const PlaceholderBadge = ({ tag, label }) => (
+  <div className="flex flex-col gap-0.5">
+    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded w-max border border-emerald-100">{tag}</span>
+    <span className="text-[10px] text-slate-400 font-bold ml-1">{label}</span>
+  </div>
+);
+

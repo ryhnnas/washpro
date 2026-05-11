@@ -24,6 +24,9 @@ export default function Cashier() {
 
   const suggestionRef = useRef(null);
 
+  const [showManualWA, setShowManualWA] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState(null);
+
   useEffect(() => {
     Promise.all([
       api.get('/services').catch(() => ({ data: [] })),
@@ -149,6 +152,7 @@ export default function Cashier() {
     if (!selectedItems.length || totalPrice <= 0) return alert("Tambah minimal 1 layanan dengan jumlah valid.");
     setLoading(true);
     setFeedback(null);
+    setShowManualWA(false);
     try {
       const payload = {
         customerName: formData.customerName,
@@ -172,11 +176,18 @@ export default function Cashier() {
         const reasonMap = {
           NO_PHONE: 'Pelanggan tidak memiliki nomor HP.',
           WA_DISABLED: 'WhatsApp Gateway dinonaktifkan di Pengaturan.',
+          WA_DISABLED_GLOBALLY: 'WhatsApp Gateway sedang dalam pemeliharaan.',
           NO_API_URL: 'URL Gateway belum dikonfigurasi.',
         };
         setFeedback({ type: 'warning', message: `Transaksi tersimpan. Auto-kirim WA dilewati: ${reasonMap[wa.reason] || wa.reason}.` });
+        if (wa.reason !== 'NO_PHONE') {
+          setShowManualWA(true);
+          setLastTransaction({ ...payload, totalPrice, endDate });
+        }
       } else if (wa?.error) {
         setFeedback({ type: 'error', message: `Transaksi tersimpan tapi WA gagal terkirim: ${wa.error}` });
+        setShowManualWA(true);
+        setLastTransaction({ ...payload, totalPrice, endDate });
       } else {
         setFeedback({ type: 'success', message: 'Transaksi berhasil disimpan.' });
       }
@@ -204,19 +215,18 @@ export default function Cashier() {
   };
 
   const openWhatsApp = () => {
-    if (!formData.customerPhone || totalPrice <= 0) return alert("Nomor HP dan total harga harus ada");
-    let phone = formData.customerPhone;
+    const data = lastTransaction || formData;
+    if (!data.customerPhone || data.totalPrice <= 0) return alert("Nomor HP dan total harga harus ada");
+    let phone = data.customerPhone;
     if (phone.startsWith('0')) phone = '62' + phone.slice(1);
 
-    const lines = selectedItems
-      .map(({ service, qty }, i) => `${i + 1}. ${service.name} - ${qty} ${service.unit}`)
+    const lines = (data.items || [])
+      .map((item, i) => `${i + 1}. ${item.serviceName} - ${item.qty}`)
       .join('\n');
-    const msg = `Halo *Kak ${formData.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di WashPro.\n\n*Detail Order:*\n${lines}\n*Total Biaya: Rp ${totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${endDate || 'Segera'}\n\nTerima kasih!`;
+    const msg = `Halo *Kak ${data.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di WashPro.\n\n*Detail Order:*\n${lines}\n*Total Biaya: Rp ${data.totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${data.endDate || 'Segera'}\n\nTerima kasih!`;
     const encoded = encodeURIComponent(msg);
     window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
   };
-
-  const waEnabled = settings?.whatsappEnabled;
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -224,10 +234,6 @@ export default function Cashier() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-1 sm:mb-2 tracking-tight">Terminal Kasir</h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium">Buat transaksi baru — nota dikirim otomatis ke WhatsApp pelanggan.</p>
-        </div>
-        <div className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-2xl border text-xs sm:text-sm font-bold w-max ${waEnabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
-          <MessageCircle size={14} className="sm:w-4 sm:h-4"/>
-          {waEnabled ? 'WhatsApp Gateway Aktif' : 'WhatsApp Gateway Nonaktif'}
         </div>
       </div>
 
@@ -238,7 +244,17 @@ export default function Cashier() {
           'bg-rose-50 border-rose-200 text-rose-800'
         }`}>
           {feedback.type === 'success' ? <CheckCircle2 size={18} className="shrink-0 mt-0.5"/> : <AlertTriangle size={18} className="shrink-0 mt-0.5"/>}
-          <div className="font-bold flex-1">{feedback.message}</div>
+          <div className="flex-1">
+            <div className="font-bold mb-1">{feedback.message}</div>
+            {showManualWA && (
+              <button 
+                onClick={openWhatsApp}
+                className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-[#25D366] text-white rounded-lg font-bold hover:bg-[#1ebd59] transition-colors"
+              >
+                <Send size={14}/> Kirim WA Manual
+              </button>
+            )}
+          </div>
           <button onClick={() => setFeedback(null)} className="ml-auto text-current/60 hover:text-current flex-shrink-0"><span className="sr-only">Tutup</span>×</button>
         </div>
       )}
@@ -457,24 +473,14 @@ export default function Cashier() {
            </div>
 
            {/* Tombol Aksi */}
-           <div className="grid grid-cols-2 gap-4">
+           <div className="w-full">
               <button 
                 form="cashier-form"
                 type="submit"
                 disabled={loading || totalPrice <= 0}
-                className="premium-button text-xs sm:text-sm md:text-base disabled:opacity-50 disabled:cursor-not-allowed group h-12 sm:h-14 md:h-[60px]"
+                className="premium-button w-full text-sm md:text-lg disabled:opacity-50 disabled:cursor-not-allowed group h-14 md:h-16"
               >
-                <Save size={18} className="sm:w-5 sm:h-5 group-hover:scale-110 transition-transform" /> {loading ? 'Menyimpan...' : 'Bayar'}
-              </button>
-              
-              <button
-                type="button"
-                onClick={openWhatsApp}
-                disabled={totalPrice <= 0 || !formData.customerPhone}
-                title={waEnabled ? 'Gateway aktif — nota otomatis terkirim saat Anda Bayar. Tombol ini untuk preview manual.' : 'Buka WhatsApp Web manual (gateway nonaktif)'}
-                className="h-12 sm:h-14 md:h-[60px] flex items-center justify-center gap-2 px-4 sm:px-6 py-4 bg-[#25D366] hover:bg-[#1ebd59] shadow-lg shadow-[#25D366]/25 hover:shadow-[#25D366]/40 text-white font-extrabold rounded-2xl transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group text-xs sm:text-sm md:text-base"
-              >
-                <Send size={18} className="sm:w-5 sm:h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /> {waEnabled ? 'Preview WA' : 'Manual WA'}
+                <Save size={24} className="group-hover:scale-110 transition-transform" /> {loading ? 'Menyimpan...' : 'Bayar Sekarang'}
               </button>
            </div>
         </div>

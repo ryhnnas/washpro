@@ -9,6 +9,8 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const settingRoutes = require('./routes/settingRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const whatsappRoutes = require('./routes/whatsappRoutes');
+const { startHealthCheck } = require('./services/whatsappService');
 
 const app = express();
 app.use(cors());
@@ -22,9 +24,13 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // Test Route
 app.get('/', (req, res) => res.send("WashPro API Active"));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  startHealthCheck();
+});

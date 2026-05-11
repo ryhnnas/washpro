@@ -24,6 +24,7 @@ model Business {
   setting       BusinessSetting?
   customers     Customer[]
   membershipPackageTemplates MembershipPackageTemplate[]
+  whatsappSession WhatsAppSession?
 }
 
 // 2. Tabel User (RBAC)
@@ -129,20 +130,17 @@ model BusinessSetting {
   // Pengaturan Hak Akses Staff (JSON stringify list menu yang dibolehkan)
   staffAllowedMenus     String   @db.Text
 
-  // Konfigurasi WhatsApp Gateway (GOWA) per bisnis
-  // Sesuai proposal: integrasi GOWA untuk auto-send nota digital ke pelanggan
-  whatsappEnabled       Boolean  @default(false) @map("whatsapp_enabled")
-  whatsappApiUrl        String?  @map("whatsapp_api_url")    // contoh: http://localhost:3000
-  whatsappUsername      String?  @map("whatsapp_username")   // basic auth GOWA
-  whatsappPassword      String?  @map("whatsapp_password")   // basic auth GOWA (disimpan plaintext, sebaiknya encrypt di production)
-  whatsappSenderName    String?  @map("whatsapp_sender_name") // nama yang muncul pada template
-
   // Konfigurasi paket membership berbayar (1 paket)
   membershipPackageName String   @default("Paket Membership") @map("membership_package_name")
   membershipDurationDays Int     @default(30) @map("membership_duration_days")
 
+  // Konfigurasi WhatsApp
+  whatsappReceiptTemplate String?  @db.Text @map("whatsapp_receipt_template")
+
   business              Business @relation(fields: [businessId], references: [id])
+
 }
+
 
 // 6. Tabel Database Pelanggan (dengan sistem Membership/Loyalitas sesuai proposal)
 model Customer {
@@ -239,4 +237,17 @@ model CustomerMembershipUsageLog {
   customerMembership   CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
   transaction          Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   service              Service @relation(fields: [serviceId], references: [id])
+}
+
+model WhatsAppSession {
+  businessId    String    @id @map("business_id")
+  phoneNumber   String?   @map("phone_number")
+  status        String    @default("disconnected")
+  connectedVia  String?   @map("connected_via")
+  lastConnected DateTime? @map("last_connected")
+  lastError     String?   @db.Text @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }

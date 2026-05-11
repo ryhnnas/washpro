@@ -1,13 +1,6 @@
 const prisma = require('../config/prisma');
 const whatsappService = require('../services/whatsappService');
 
-// Sembunyikan password dari response
-const sanitize = (s) => {
-  if (!s) return s;
-  const { whatsappPassword, ...rest } = s;
-  return { ...rest, whatsappPasswordSet: !!whatsappPassword };
-};
-
 const getSettings = async (req, res) => {
   try {
     const businessId = req.user.businessId;
@@ -20,6 +13,33 @@ const getSettings = async (req, res) => {
         },
       });
     }
+
+    // Parse staffAllowedMenus (bisa array lama atau object baru)
+    let config = {
+      menus: ['CASHIER', 'TRACKING'],
+      whatsappTemplates: {
+        RECEIPT: null,
+        PROSES: null,
+        SELESAI: null,
+        DIAMBIL: null,
+      },
+    };
+    try {
+      const parsed = JSON.parse(setting.staffAllowedMenus || '[]');
+      if (Array.isArray(parsed)) {
+        config.menus = parsed;
+      } else if (typeof parsed === 'object' && parsed !== null) {
+        config = { ...config, ...parsed };
+        // Migrasi/handle legacy whatsappReceiptTemplate ke format baru
+        if (parsed.whatsappReceiptTemplate && !config.whatsappTemplates?.RECEIPT) {
+          if (!config.whatsappTemplates) config.whatsappTemplates = {};
+          config.whatsappTemplates.RECEIPT = parsed.whatsappReceiptTemplate;
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing staffAllowedMenus:', e);
+    }
+
     const membershipTemplate = await prisma.membershipPackageTemplate.findFirst({
       where: { businessId, isActive: true },
       include: {
@@ -30,8 +50,14 @@ const getSettings = async (req, res) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    const waSession = await prisma.whatsAppSession.findUnique({ where: { businessId } });
+    const isWaConnected = waSession?.status === 'connected' && process.env.GOWA_ENABLED !== 'false';
+
     res.json({
-      ...sanitize(setting),
+      ...setting,
+      staffAllowedMenus: JSON.stringify(config.menus), // Backward compatibility for frontend
+      whatsappTemplates: config.whatsappTemplates,
+      whatsappEnabled: isWaConnected,
       membershipPackage: membershipTemplate
         ? {
             id: membershipTemplate.id,
@@ -63,33 +89,26 @@ const updateSettings = async (req, res) => {
     requireCustomerPhone,
     requireCustomerAddress,
     staffAllowedMenus,
-    whatsappEnabled,
-    whatsappApiUrl,
-    whatsappUsername,
-    whatsappPassword,
-    whatsappSenderName,
+    whatsappTemplates,
     membershipPackageName,
     membershipDurationDays,
     membershipPackageItems,
   } = req.body;
 
   try {
+    const combinedConfig = JSON.stringify({
+      menus: staffAllowedMenus || ['CASHIER', 'TRACKING'],
+      whatsappTemplates: whatsappTemplates || null,
+    });
+
     const data = {
       requireCustomerName,
       requireCustomerPhone,
       requireCustomerAddress,
-      staffAllowedMenus: JSON.stringify(staffAllowedMenus || ['CASHIER', 'TRACKING']),
-      whatsappEnabled,
-      whatsappApiUrl,
-      whatsappUsername,
-      whatsappSenderName,
+      staffAllowedMenus: combinedConfig,
       membershipPackageName,
       membershipDurationDays,
     };
-    // Hanya update password bila user mengisi (kosong = pertahankan lama)
-    if (whatsappPassword !== undefined && whatsappPassword !== '') {
-      data.whatsappPassword = whatsappPassword;
-    }
 
     const businessId = req.user.businessId;
     const setting = await prisma.businessSetting.upsert({
@@ -98,8 +117,6 @@ const updateSettings = async (req, res) => {
       create: {
         businessId,
         ...data,
-        whatsappPassword: whatsappPassword || null,
-        staffAllowedMenus: JSON.stringify(staffAllowedMenus || ['CASHIER', 'TRACKING']),
       },
     });
 
@@ -139,42 +156,17 @@ const updateSettings = async (req, res) => {
       }
     }
 
-    res.json(sanitize(setting));
+    // Return virtual fields too
+    res.json({
+      ...setting,
+      staffAllowedMenus: JSON.stringify(staffAllowedMenus || ['CASHIER', 'TRACKING']),
+      whatsappTemplates,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-// Test koneksi GOWA dari pengaturan saat ini (dipakai pada UI "Periksa Koneksi")
-const testWhatsapp = async (req, res) => {
-  if (req.user.role !== 'OWNER') {
-    return res.status(403).json({ message: 'Hanya OWNER' });
-  }
-  const result = await whatsappService.checkGateway(req.user.businessId);
-  res.json(result);
-};
 
-const sendTestMessage = async (req, res) => {
-  if (req.user.role !== 'OWNER') {
-    return res.status(403).json({ message: 'Hanya OWNER' });
-  }
-  const { phone } = req.body;
-  if (!phone) return res.status(400).json({ message: 'Nomor HP wajib diisi' });
 
-  const business = await prisma.business.findUnique({ where: { id: req.user.businessId } });
-  const message =
-    `*${business?.name || 'WashPro'}*\n` +
-    `Pesan Uji Coba\n` +
-    `${'-'.repeat(28)}\n` +
-    `Selamat! Integrasi WhatsApp Gateway Anda sudah aktif. ` +
-    `Mulai sekarang, nota digital akan terkirim otomatis ke pelanggan.\n\n` +
-    `_Pesan otomatis dari sistem WashPro._`;
-  const result = await whatsappService.sendMessage({
-    businessId: req.user.businessId,
-    phone,
-    message,
-  });
-  res.json(result);
-};
-
-module.exports = { getSettings, updateSettings, testWhatsapp, sendTestMessage };
+module.exports = { getSettings, updateSettings };
