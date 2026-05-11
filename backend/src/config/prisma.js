@@ -15,12 +15,14 @@ prisma.$on('warn', (e) => {
   console.warn(`[Prisma Warning] ${new Date().toISOString()}:`, e.message);
 });
 
-prisma.$connect()
-  .then(() => {
-    console.log('✅ [Prisma] Terhubung ke Database dengan sukses.');
-  })
-  .catch((err) => {
-    console.error('❌ [Prisma] Gagal terhubung ke Database pada startup:', err.message);
-  });
+if (process.env.NODE_ENV !== 'test') {
+  prisma.$connect()
+    .then(() => {
+      console.log('✅ [Prisma] Terhubung ke Database dengan sukses.');
+    })
+    .catch((err) => {
+      console.error('❌ [Prisma] Gagal terhubung ke Database pada startup:', err.message);
+    });
+}
 
 module.exports = prisma;
