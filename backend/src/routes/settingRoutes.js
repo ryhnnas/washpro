@@ -5,7 +5,7 @@ const validate = require('../middleware/validator');
 const { updateSettingSchema } = require('../schemas/settingSchema');
 const { getSettings, updateSettings } = require('../controllers/settingController');
 
-router.get('/', authMiddleware, getSettings);
-router.put('/', authMiddleware, validate(updateSettingSchema), updateSettings);
+router.get('/', authMiddleware, authMiddleware.authorizeRole('OWNER'), getSettings);
+router.put('/', authMiddleware, authMiddleware.authorizeRole('OWNER'), validate(updateSettingSchema), updateSettings);
 
 module.exports = router;

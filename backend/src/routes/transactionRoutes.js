@@ -13,7 +13,7 @@ const {
 } = require('../controllers/transactionController');
 
 router.get('/', authMiddleware, getTransactions);
-router.get('/export', authMiddleware, getExportData);
+router.get('/export', authMiddleware, authMiddleware.authorizeRole('OWNER'), getExportData);
 router.get('/overdue', authMiddleware, getOverdueTransactions);
 router.post('/', authMiddleware, validate(createTransactionSchema), createTransaction);
 router.patch('/:id/status', authMiddleware, validate(updateStatusSchema), updateStatus);

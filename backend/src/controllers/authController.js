@@ -53,7 +53,11 @@ const registerOwner = async (req, res) => {
 
       return { business, user };
     });
-    res.status(201).json({ message: "Registrasi Berhasil", data: result });
+    
+    const userWithoutPassword = { ...result.user };
+    delete userWithoutPassword.password;
+    
+    res.status(201).json({ message: "Registrasi Berhasil", data: { business: result.business, user: userWithoutPassword } });
   } catch (error) {
     res.status(400).json({ error: "Email sudah terdaftar atau data tidak valid" });
   }

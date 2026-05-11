@@ -16,4 +16,16 @@ const authMiddleware = (req, res, next) => {
   }
 };
 
+const authorizeRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ message: "Akses ditolak, role tidak memiliki izin" });
+    }
+    next();
+  };
+};
+
+// Export authMiddleware as default, but attach authorizeRole to it for backward compatibility
+authMiddleware.authorizeRole = authorizeRole;
+
 module.exports = authMiddleware;
