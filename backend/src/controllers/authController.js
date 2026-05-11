@@ -23,7 +23,11 @@ const registerOwner = async (req, res) => {
       await tx.businessSetting.create({
         data: {
           businessId: business.id,
-          staffAllowedMenus: JSON.stringify(["CASHIER", "TRACKING"])
+          allowStaffCustomers: true, // Default staff bisa akses pelanggan
+          allowStaffDashboard: false,
+          allowStaffServices: false,
+          allowStaffReports: false,
+          allowStaffSettings: false
         }
       });
 

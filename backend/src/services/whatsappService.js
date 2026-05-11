@@ -268,13 +268,19 @@ const sendMessage = async ({ businessId, phone, message, skipQueue = false }) =>
 
 const getBusinessConfig = async (businessId) => {
   const setting = await prisma.businessSetting.findUnique({ where: { businessId } });
-  if (!setting?.staffAllowedMenus) return null;
-  try {
-    const config = JSON.parse(setting.staffAllowedMenus);
-    return typeof config === 'object' && !Array.isArray(config) ? config : null;
-  } catch (e) {
-    return null;
+  if (!setting) return null;
+  
+  let whatsappTemplates = { RECEIPT: null, PROSES: null, SELESAI: null, DIAMBIL: null };
+  
+  // Prioritas kolom baru
+  if (setting.whatsappTemplates) {
+    try {
+      whatsappTemplates = { ...whatsappTemplates, ...JSON.parse(setting.whatsappTemplates) };
+      return { whatsappTemplates };
+    } catch (e) { console.error('Error parsing whatsappTemplates:', e); }
   }
+
+  return { whatsappTemplates };
 };
 
 const buildReceiptMessage = async ({ business, transaction }) => {

@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
-const { getSettings, updateSettings, testWhatsapp, sendTestMessage } = require('../controllers/settingController');
+const validate = require('../middleware/validator');
+const { updateSettingSchema } = require('../schemas/settingSchema');
+const { getSettings, updateSettings } = require('../controllers/settingController');
 
 router.get('/', authMiddleware, getSettings);
-router.put('/', authMiddleware, updateSettings);
+router.put('/', authMiddleware, validate(updateSettingSchema), updateSettings);
 
 module.exports = router;

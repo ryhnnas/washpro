@@ -152,9 +152,17 @@ model BusinessSetting {
   requireCustomerPhone   Boolean @default(true)
   requireCustomerAddress Boolean @default(false)
 
-  staffAllowedMenus       String  @db.Text
+  // Staff Permissions (Broken down from JSON string)
+  allowStaffDashboard    Boolean @default(true)  @map("allow_staff_dashboard")
+  allowStaffCustomers    Boolean @default(true)  @map("allow_staff_customers")
+  allowStaffServices     Boolean @default(false) @map("allow_staff_services")
+  allowStaffReports      Boolean @default(false) @map("allow_staff_reports")
+  allowStaffSettings     Boolean @default(false) @map("allow_staff_settings")
+
   membershipPackageName   String  @default("Paket Membership") @map("membership_package_name")
   membershipDurationDays  Int     @default(30) @map("membership_duration_days")
+  
+  whatsappTemplates       String? @db.Text @map("whatsapp_templates") // Menyimpan object template (RECEIPT, PROSES, dll)
   whatsappReceiptTemplate String? @db.Text @map("whatsapp_receipt_template")
   whatsappNotificationStates String? @db.Text @map("whatsapp_notification_states")
 
