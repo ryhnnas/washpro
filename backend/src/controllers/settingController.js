@@ -4,6 +4,15 @@ const whatsappService = require('../services/whatsappService');
 const getSettings = async (req, res) => {
   try {
     const businessId = req.user.businessId;
+    
+    // Pastikan bisnis ada sebelum mengambil/membuat setting
+    const businessExists = await prisma.business.findUnique({ where: { id: businessId } });
+    if (!businessExists) {
+      return res.status(404).json({ 
+        error: "Bisnis tidak ditemukan. Silakan login kembali atau registrasi ulang karena database baru saja di-reset." 
+      });
+    }
+
     let setting = await prisma.businessSetting.findUnique({ where: { businessId } });
     if (!setting) {
       setting = await prisma.businessSetting.create({
@@ -40,7 +49,7 @@ const getSettings = async (req, res) => {
       console.error('Error parsing staffAllowedMenus:', e);
     }
 
-    const membershipTemplate = await prisma.membershipPackageTemplate.findFirst({
+    const membershipTemplates = await prisma.membershipPackageTemplate.findMany({
       where: { businessId, isActive: true },
       include: {
         quotaItems: {
@@ -53,26 +62,32 @@ const getSettings = async (req, res) => {
     const waSession = await prisma.whatsAppSession.findUnique({ where: { businessId } });
     const isWaConnected = waSession?.status === 'connected' && process.env.GOWA_ENABLED !== 'false';
 
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { name: true, address: true, phone: true }
+    });
+
     res.json({
       ...setting,
+      businessName: business?.name,
+      businessAddress: business?.address,
+      businessPhone: business?.phone,
       staffAllowedMenus: JSON.stringify(config.menus), // Backward compatibility for frontend
       whatsappTemplates: config.whatsappTemplates,
       whatsappEnabled: isWaConnected,
-      membershipPackage: membershipTemplate
-        ? {
-            id: membershipTemplate.id,
-            name: membershipTemplate.name,
-            durationDays: membershipTemplate.durationDays,
-            items: membershipTemplate.quotaItems.map((i) => ({
-              id: i.id,
-              serviceId: i.serviceId,
-              serviceName: i.service.name,
-              unit: i.service.unit,
-              quotaAmount: i.quotaAmount,
-              deductionRate: i.deductionRate,
-            })),
-          }
-        : null,
+      membershipPackages: membershipTemplates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        durationDays: t.durationDays,
+        items: t.quotaItems.map((i) => ({
+          id: i.id,
+          serviceId: i.serviceId,
+          serviceName: i.service.name,
+          unit: i.service.unit,
+          quotaAmount: i.quotaAmount,
+          deductionRate: i.deductionRate,
+        })),
+      })),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -84,18 +99,33 @@ const updateSettings = async (req, res) => {
     return res.status(403).json({ message: 'Hanya OWNER yang bisa mengubah pengaturan' });
   }
 
-  const {
+    const {
+    businessName,
+    businessAddress,
+    businessPhone,
     requireCustomerName,
     requireCustomerPhone,
     requireCustomerAddress,
     staffAllowedMenus,
     whatsappTemplates,
-    membershipPackageName,
-    membershipDurationDays,
-    membershipPackageItems,
+    membershipPackages, // Array of packages
   } = req.body;
 
   try {
+    const businessId = req.user.businessId;
+
+    // Update Business Profile if owner
+    if (businessName || businessAddress || businessPhone) {
+      await prisma.business.update({
+        where: { id: businessId },
+        data: {
+          name: businessName,
+          address: businessAddress,
+          phone: businessPhone
+        }
+      });
+    }
+
     const combinedConfig = JSON.stringify({
       menus: staffAllowedMenus || ['CASHIER', 'TRACKING'],
       whatsappTemplates: whatsappTemplates || null,
@@ -106,11 +136,7 @@ const updateSettings = async (req, res) => {
       requireCustomerPhone,
       requireCustomerAddress,
       staffAllowedMenus: combinedConfig,
-      membershipPackageName,
-      membershipDurationDays,
     };
-
-    const businessId = req.user.businessId;
     const setting = await prisma.businessSetting.upsert({
       where: { businessId },
       update: data,
@@ -120,39 +146,42 @@ const updateSettings = async (req, res) => {
       },
     });
 
-    if (Array.isArray(membershipPackageItems)) {
-      const currentTemplate = await prisma.membershipPackageTemplate.findFirst({
-        where: { businessId, isActive: true },
-      });
-      const template = currentTemplate
-        ? await prisma.membershipPackageTemplate.update({
-            where: { id: currentTemplate.id },
-            data: {
-              name: membershipPackageName || setting.membershipPackageName,
-              durationDays: membershipDurationDays || setting.membershipDurationDays,
-            },
-          })
-        : await prisma.membershipPackageTemplate.create({
-            data: {
-              businessId,
-              name: membershipPackageName || setting.membershipPackageName,
-              durationDays: membershipDurationDays || setting.membershipDurationDays,
-              isActive: true,
-            },
-          });
+    if (Array.isArray(membershipPackages)) {
+      for (const pkg of membershipPackages) {
+        if (!pkg.name) continue;
 
-      await prisma.membershipPackageQuotaItem.deleteMany({
-        where: { templateId: template.id },
-      });
-      if (membershipPackageItems.length > 0) {
-        await prisma.membershipPackageQuotaItem.createMany({
-          data: membershipPackageItems.map((i) => ({
-            templateId: template.id,
-            serviceId: i.serviceId,
-            quotaAmount: Number(i.quotaAmount) || 0,
-            deductionRate: Number(i.deductionRate) || 1,
-          })),
-        });
+        const template = pkg.id
+          ? await prisma.membershipPackageTemplate.update({
+              where: { id: pkg.id },
+              data: {
+                name: pkg.name,
+                durationDays: Number(pkg.durationDays) || 30,
+              },
+            })
+          : await prisma.membershipPackageTemplate.create({
+              data: {
+                businessId,
+                name: pkg.name,
+                durationDays: Number(pkg.durationDays) || 30,
+                isActive: true,
+              },
+            });
+
+        if (Array.isArray(pkg.items)) {
+          await prisma.membershipPackageQuotaItem.deleteMany({
+            where: { templateId: template.id },
+          });
+          if (pkg.items.length > 0) {
+            await prisma.membershipPackageQuotaItem.createMany({
+              data: pkg.items.map((i) => ({
+                templateId: template.id,
+                serviceId: i.serviceId,
+                quotaAmount: Number(i.quotaAmount) || 0,
+                deductionRate: Number(i.deductionRate) || 1,
+              })),
+            });
+          }
+        }
       }
     }
 
@@ -161,6 +190,27 @@ const updateSettings = async (req, res) => {
       ...setting,
       staffAllowedMenus: JSON.stringify(staffAllowedMenus || ['CASHIER', 'TRACKING']),
       whatsappTemplates,
+      membershipPackages: await prisma.membershipPackageTemplate.findMany({
+        where: { businessId, isActive: true },
+        include: {
+          quotaItems: {
+            include: { service: { select: { id: true, name: true, unit: true } } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }).then(pkgs => pkgs.map(t => ({
+        id: t.id,
+        name: t.name,
+        durationDays: t.durationDays,
+        items: t.quotaItems.map(i => ({
+          id: i.id,
+          serviceId: i.serviceId,
+          serviceName: i.service.name,
+          unit: i.service.unit,
+          quotaAmount: i.quotaAmount,
+          deductionRate: i.deductionRate,
+        })),
+      }))),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

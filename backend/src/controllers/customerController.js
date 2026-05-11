@@ -123,10 +123,7 @@ const createCustomer = async (req, res) => {
 };
 
 const createCustomerWithMembership = async (req, res) => {
-  if (req.user.role !== 'OWNER') {
-    return res.status(403).json({ message: 'Hanya OWNER yang dapat menambah membership customer' });
-  }
-  const { name, phone, address, startAt } = req.body;
+  const { name, phone, address, startAt, templateId } = req.body;
   if (!name) return res.status(400).json({ message: 'Nama customer wajib diisi' });
 
   try {
@@ -148,21 +145,16 @@ const createCustomerWithMembership = async (req, res) => {
           data: { businessId: req.user.businessId, name, phone: null, address },
         });
       }
-
-      const membership = await membershipService.activateCustomerMembership({
+      await membershipService.activateCustomerMembership({
         businessId: req.user.businessId,
         customerId: customer.id,
-        startAt: startAt ? new Date(startAt) : new Date(),
+        templateId,
+        startAt,
         tx,
       });
-
-      return { customer, membership };
+      return customer;
     });
-
-    res.status(201).json({
-      message: 'Customer baru dan membership berhasil dibuat',
-      ...result,
-    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -184,25 +176,20 @@ const updateCustomer = async (req, res) => {
 
 const activateMembership = async (req, res) => {
   const { id } = req.params;
-  const { startAt } = req.body;
-  if (req.user.role !== 'OWNER') {
-    return res.status(403).json({ message: 'Hanya OWNER yang dapat aktivasi membership' });
-  }
+  const { startAt, templateId } = req.body;
   try {
     const customer = await prisma.customer.findFirst({
       where: { id, businessId: req.user.businessId },
     });
-    if (!customer) return res.status(404).json({ message: 'Pelanggan tidak ditemukan' });
+    if (!customer) return res.status(404).json({ message: 'Customer tidak ditemukan' });
 
-    const membership = await prisma.$transaction((tx) =>
-      membershipService.activateCustomerMembership({
-        businessId: req.user.businessId,
-        customerId: id,
-        startAt: startAt ? new Date(startAt) : new Date(),
-        tx,
-      })
-    );
-    res.json({ message: 'Membership customer berhasil diaktivasi', membership });
+    await membershipService.activateCustomerMembership({
+      businessId: req.user.businessId,
+      customerId: id,
+      templateId,
+      startAt,
+    });
+    res.json({ message: 'Membership berhasil diaktifkan' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -236,6 +223,9 @@ const getMembershipUsage = async (req, res) => {
 
 const deleteCustomer = async (req, res) => {
   const { id } = req.params;
+  if (req.user.role !== 'OWNER') {
+    return res.status(403).json({ message: 'Hanya OWNER yang dapat menghapus data pelanggan' });
+  }
   try {
     await prisma.customer.delete({
       where: { id, businessId: req.user.businessId },

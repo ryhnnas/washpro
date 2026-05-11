@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users } from 'lucide-react';
 import api from '../lib/axios';
+import logo from '../assets/logo.png';
 
 export default function MainLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -75,8 +76,10 @@ export default function MainLayout() {
       `}>
         <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 h-16 sm:h-18 lg:h-20 border-b border-white/10">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-8 sm:w-9 h-8 sm:h-9 rounded-lg sm:rounded-xl bg-tertiary flex justify-center items-center font-black text-primary shadow-lg shadow-tertiary/20 text-xs sm:text-sm">W</div>
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white tracking-wide">WashPro</h1>
+            <img src={logo} alt="WashPro Logo" className="w-8 sm:w-10 lg:w-12 h-auto object-contain" />
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-black text-white tracking-wide truncate">
+              {'WashPro'}
+            </h1>
           </div>
           <button className="lg:hidden p-1.5 sm:p-2 rounded-lg hover:bg-white/10 text-secondary" onClick={() => setSidebarOpen(false)}>
             <X size={18} className="sm:w-5 sm:h-5" />
@@ -149,8 +152,12 @@ export default function MainLayout() {
             >
               <Menu size={20} className="sm:w-6 sm:h-6" />
             </button>
-            {/* Hapus nama route di header karena sudah ada di konten halaman */}
-            <h2 className="text-sm sm:text-lg lg:text-xl font-extrabold text-primary hidden md:block truncate"></h2>
+            <div className="flex items-center gap-2">
+              <img src={logo} alt="Logo" className="w-6 sm:w-8 h-auto object-contain lg:hidden" />
+              <h2 className="text-sm sm:text-lg lg:text-xl font-extrabold text-primary truncate">
+                {settings?.businessName || 'WashPro'}
+              </h2>
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
              <div className="hidden sm:block text-right">

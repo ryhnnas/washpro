@@ -223,7 +223,8 @@ export default function Cashier() {
     const lines = (data.items || [])
       .map((item, i) => `${i + 1}. ${item.serviceName} - ${item.qty}`)
       .join('\n');
-    const msg = `Halo *Kak ${data.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di WashPro.\n\n*Detail Order:*\n${lines}\n*Total Biaya: Rp ${data.totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${data.endDate || 'Segera'}\n\nTerima kasih!`;
+    const businessName = settings?.businessName || 'WashPro';
+    const msg = `Halo *Kak ${data.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di ${businessName}.\n\n*Detail Order:*\n${lines}\n*Total Biaya: Rp ${data.totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${data.endDate || 'Segera'}\n\nTerima kasih!`;
     const encoded = encodeURIComponent(msg);
     window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
   };

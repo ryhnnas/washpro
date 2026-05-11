@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const whatsappQueueService = require('./whatsappQueueService');
 
 const formatIDR = (n) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
@@ -210,7 +211,7 @@ const logoutDevice = async (businessId) => {
 };
 
 // 2. Messaging
-const sendMessage = async ({ businessId, phone, message }) => {
+const sendMessage = async ({ businessId, phone, message, skipQueue = false }) => {
   const target = normalizePhone(phone);
   if (!target) return { ok: false, skipped: true, reason: 'NO_PHONE' };
 
@@ -219,6 +220,14 @@ const sendMessage = async ({ businessId, phone, message }) => {
   }
 
   const session = await prisma.whatsAppSession.findUnique({ where: { businessId } });
+  
+  // Jika tidak terkoneksi dan bukan dari worker queue, masukkan ke queue
+  if ((!session || session.status !== 'connected') && !skipQueue) {
+    await whatsappQueueService.addToQueue({ businessId, phone: target, message });
+    return { ok: false, queued: true, reason: 'SESSION_NOT_CONNECTED' };
+  }
+
+  // Jika tetap dipaksa kirim (misal dari worker) tapi session mati, return error
   if (!session || session.status !== 'connected') {
     return { ok: false, skipped: true, reason: 'SESSION_NOT_CONNECTED' };
   }
@@ -236,10 +245,22 @@ const sendMessage = async ({ businessId, phone, message }) => {
       if (res.status === 401 || data.message?.toLowerCase().includes('not connected')) {
         await updateSession(businessId, { status: 'disconnected', lastError: 'Session dropped during send' });
       }
+
+      // Jika gagal sistem (5xx atau timeout), masukkan ke queue jika belum di queue
+      if (!skipQueue && (res.status >= 500 || res.status === 401)) {
+        await whatsappQueueService.addToQueue({ businessId, phone: target, message });
+        return { ok: false, queued: true, status: res.status, error: data?.message || data?.error || `HTTP ${res.status}` };
+      }
+
       return { ok: false, status: res.status, error: data?.message || data?.error || `HTTP ${res.status}` };
     }
     return { ok: true, data };
   } catch (err) {
+    // Jika timeout atau network error, masukkan ke queue
+    if (!skipQueue) {
+      await whatsappQueueService.addToQueue({ businessId, phone: target, message });
+      return { ok: false, queued: true, error: err.message };
+    }
     return { ok: false, error: err.message };
   }
 };

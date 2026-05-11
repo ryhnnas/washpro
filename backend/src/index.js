@@ -11,6 +11,8 @@ const customerRoutes = require('./routes/customerRoutes');
 const staffRoutes = require('./routes/staffRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
 const { startHealthCheck } = require('./services/whatsappService');
+const whatsappService = require('./services/whatsappService');
+const whatsappQueueService = require('./services/whatsappQueueService');
 
 const app = express();
 app.use(cors());
@@ -33,4 +35,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   startHealthCheck();
+  whatsappQueueService.initWorker(whatsappService);
 });

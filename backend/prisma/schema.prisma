@@ -1,4 +1,7 @@
-// prisma/schema.prisma
+// =============================================
+// PRISMA SCHEMA - Laundry POS (Multi-Tenant)
+// Versi Final + Strategic Indexing
+// =============================================
 
 generator client {
   provider = "prisma-client-js"
@@ -9,25 +12,30 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. Tabel Bisnis (Tenant)
+// =============================================
+// 1. BUSINESS (Tenant)
+// =============================================
 model Business {
-  id            String   @id @default(uuid())
-  name          String
-  address       String?  @db.Text
-  phone         String?
-  createdAt     DateTime @default(now()) @map("created_at")
-  
-  // Relasi
-  users         User[]
-  transactions  Transaction[]
-  services      Service[]
-  setting       BusinessSetting?
-  customers     Customer[]
-  membershipPackageTemplates MembershipPackageTemplate[]
-  whatsappSession WhatsAppSession?
+  id        String   @id @default(uuid())
+  name      String
+  address   String?  @db.Text
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users                       User[]
+  transactions                Transaction[]
+  services                    Service[]
+  setting                     BusinessSetting?
+  customers                   Customer[]
+  membershipPackageTemplates  MembershipPackageTemplate[]
+  whatsappSession             WhatsAppSession?
+  whatsAppQueues              WhatsAppQueue[]
 }
 
-// 2. Tabel User (RBAC)
+// =============================================
+// 2. USER
+// =============================================
 model User {
   id         String   @id @default(uuid())
   businessId String   @map("business_id")
@@ -35,11 +43,14 @@ model User {
   email      String   @unique
   password   String
   role       Role     @default(STAFF)
-  
-  // Relasi ke Bisnis
-  business   Business @relation(fields: [businessId], references: [id])
-  
-  createdAt  DateTime @default(now()) @map("created_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business     Business      @relation(fields: [businessId], references: [id])
+  transactions Transaction[]
+
+  @@index([businessId])
 }
 
 enum Role {
@@ -47,21 +58,31 @@ enum Role {
   STAFF
 }
 
-// 3. Tabel Layanan (Owner bisa custom harga/jenis)
+// =============================================
+// 3. SERVICE
+// =============================================
 model Service {
-  id         String   @id @default(uuid())
-  businessId String   @map("business_id")
-  name       String   // Contoh: "Cuci Reguler"
-  price      Int      // Harga per KG atau per Unit
-  type       ServiceType // KILOAN atau SATUAN
-  unit       String   @default("kg") // kg, pcs, m2, dll
-  estimateValue Int   @default(24) @map("estimate_value")
-  estimateUnit  EstimateUnit @default(HOUR) @map("estimate_unit")
+  id             String       @id @default(uuid())
+  businessId     String       @map("business_id")
+  name           String
+  price          Int
+  type           ServiceType
+  unit           String       @default("kg")
+  estimateValue  Int          @default(24) @map("estimate_value")
+  estimateUnit   EstimateUnit @default(HOUR) @map("estimate_unit")
+  isActive       Boolean      @default(true) @map("is_active")
 
-  business   Business @relation(fields: [businessId], references: [id])
-  packageQuotaItems MembershipPackageQuotaItem[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id])
+
+  packageQuotaItems  MembershipPackageQuotaItem[]
   membershipBalances CustomerMembershipQuotaBalance[]
   membershipUsages   CustomerMembershipUsageLog[]
+
+  @@index([businessId])
+  @@index([businessId, isActive]) // Untuk filter layanan aktif
 }
 
 enum ServiceType {
@@ -74,91 +95,139 @@ enum EstimateUnit {
   DAY
 }
 
-// 4. Tabel Transaksi (Inti POS)
+// =============================================
+// 4. TRANSACTION (Paling Penting - Banyak Index)
+// =============================================
 model Transaction {
-  id            String    @id @default(uuid())
-  businessId    String    @map("business_id")
-  customerId    String?   @map("customer_id")
-  customerMembershipId String? @map("customer_membership_id")
-  customerName  String    @map("customer_name")
-  customerPhone String?   @map("customer_phone")
-  customerAddress String? @db.Text @map("customer_address")
-  
-  serviceName   String    @map("service_name") // Simpan nama layanan saat transaksi (antisipasi harga berubah di masa depan)
-  weight        Float     // Jumlah kilo atau jumlah pcs
-  lineItems     Json?     @map("line_items")
-  totalPrice    Int       @map("total_price")
-  coveredAmount Int       @default(0) @map("covered_amount")
-  payableAmount Int       @default(0) @map("payable_amount")
-  
-  status        Status    @default(PENDING)
-  paymentMethod Payment   @map("payment_method")
-  
-  startDate     DateTime  @default(now()) @map("start_date")
-  endDate       DateTime? @map("end_date")
-  estimatedCompletionAt DateTime? @map("estimated_completion_at")
-  isOverdue     Boolean   @default(false) @map("is_overdue")
+  id                   String   @id @default(uuid())
+  businessId           String   @map("business_id")
+  customerId           String?  @map("customer_id")
+  customerMembershipId String?  @map("customer_membership_id")
+  createdByUserId      String?  @map("created_by_user_id")
+  customerName         String   @map("customer_name")
+  customerPhone        String?  @map("customer_phone")
+  customerAddress      String?  @db.Text @map("customer_address")
 
-  business      Business  @relation(fields: [businessId], references: [id])
-  customer      Customer? @relation(fields: [customerId], references: [id])
+  serviceName   String  @map("service_name")
+  weight        Float
+  lineItems     Json?   @map("line_items")
+  totalPrice    Int     @map("total_price")
+  coveredAmount Int     @default(0) @map("covered_amount")
+  payableAmount Int     @default(0) @map("payable_amount")
+
+  status        Status  @default(PENDING)
+  paymentMethod Payment @map("payment_method")
+
+  startDate               DateTime  @default(now()) @map("start_date")
+  endDate                 DateTime? @map("end_date")
+  estimatedCompletionAt   DateTime? @map("estimated_completion_at")
+  isOverdue               Boolean   @default(false) @map("is_overdue")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+
+  business           Business           @relation(fields: [businessId], references: [id])
+  customer           Customer?          @relation(fields: [customerId], references: [id])
   customerMembership CustomerMembership? @relation(fields: [customerMembershipId], references: [id])
   membershipUsageLogs CustomerMembershipUsageLog[]
+  createdBy          User?              @relation(fields: [createdByUserId], references: [id])
+
+  // ==================== STRATEGIC INDEXES ====================
+  @@index([businessId, startDate])           // Laporan harian/mingguan
+  @@index([businessId, status])              // Filter pesanan aktif
+  @@index([businessId, customerPhone])       // Cari transaksi by HP
+  @@index([businessId, isOverdue])           // Filter overdue
+  @@index([status, startDate])               // Global query (opsional)
 }
 
-enum Status {
-  PENDING
-  PROSES
-  SELESAI
-  DIAMBIL
-}
-
-enum Payment {
-  CASH
-  QRIS
-}
-
-// 5. Tabel Pengaturan Bisnis (Hak Akses, Custom Input Kasir, & Konfigurasi WhatsApp Gateway)
+// =============================================
+// 5. BUSINESS SETTING
+// =============================================
 model BusinessSetting {
-  id                    String   @id @default(uuid())
-  businessId            String   @unique @map("business_id")
-  
-  // Custom Input Kasir
-  requireCustomerName   Boolean  @default(true)
-  requireCustomerPhone  Boolean  @default(true)
+  id         String @id @default(uuid())
+  businessId String @unique @map("business_id")
+
+  requireCustomerName    Boolean @default(true)
+  requireCustomerPhone   Boolean @default(true)
   requireCustomerAddress Boolean @default(false)
-  
-  // Pengaturan Hak Akses Staff (JSON stringify list menu yang dibolehkan)
-  staffAllowedMenus     String   @db.Text
 
-  // Konfigurasi paket membership berbayar (1 paket)
-  membershipPackageName String   @default("Paket Membership") @map("membership_package_name")
-  membershipDurationDays Int     @default(30) @map("membership_duration_days")
+  staffAllowedMenus       String  @db.Text
+  membershipPackageName   String  @default("Paket Membership") @map("membership_package_name")
+  membershipDurationDays  Int     @default(30) @map("membership_duration_days")
+  whatsappReceiptTemplate String? @db.Text @map("whatsapp_receipt_template")
 
-  // Konfigurasi WhatsApp
-  whatsappReceiptTemplate String?  @db.Text @map("whatsapp_receipt_template")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  business              Business @relation(fields: [businessId], references: [id])
-
+  business Business @relation(fields: [businessId], references: [id])
 }
 
+// =============================================
+// 6. WHATSAPP SESSION
+// =============================================
+model WhatsAppSession {
+  businessId    String    @id @unique @map("business_id")
+  phoneNumber   String?   @map("phone_number")
+  status        String    @default("disconnected")
+  connectedVia  String?   @map("connected_via")
+  lastConnected DateTime? @map("last_connected")
+  lastError     String?   @db.Text @map("last_error")
 
-// 6. Tabel Database Pelanggan (dengan sistem Membership/Loyalitas sesuai proposal)
-model Customer {
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([status]) // Untuk cek session aktif
+}
+
+// =============================================
+// 7. WHATSAPP QUEUE (Antrian Pesan)
+// =============================================
+model WhatsAppQueue {
   id            String   @id @default(uuid())
   businessId    String   @map("business_id")
-  name          String
-  phone         String?
-  address       String?  @db.Text
+  customerPhone String   @map("customer_phone")
+  message       String   @db.Text
+  status        String   @default("PENDING") // PENDING, SENT, FAILED, RETRYING
+  attempts      Int      @default(0)
+  lastError     String?  @db.Text @map("last_error")
 
-  createdAt     DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  business      Business @relation(fields: [businessId], references: [id])
-  transactions  Transaction[]
-  memberships   CustomerMembership[]
-  
-  @@unique([businessId, phone])
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  // ==================== STRATEGIC INDEXES ====================
+  @@index([businessId, status])           // Ambil antrian per bisnis
+  @@index([status, createdAt])            // Proses antrian global
+  @@index([businessId, status, attempts]) // Retry logic
 }
 
+// =============================================
+// 8. CUSTOMER
+// =============================================
+model Customer {
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  name       String
+  phone      String?
+  address    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  business     Business      @relation(fields: [businessId], references: [id])
+  transactions Transaction[]
+  memberships  CustomerMembership[]
+
+  @@unique([businessId, phone])
+  @@index([businessId, name]) // Pencarian pelanggan by nama
+}
+
+// =============================================
+// 9. MEMBERSHIP SYSTEM
+// =============================================
 model MembershipPackageTemplate {
   id           String   @id @default(uuid())
   businessId   String   @map("business_id")
@@ -166,22 +235,25 @@ model MembershipPackageTemplate {
   durationDays Int      @default(30) @map("duration_days")
   isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  business     Business  @relation(fields: [businessId], references: [id])
-  quotaItems   MembershipPackageQuotaItem[]
+  business            Business                     @relation(fields: [businessId], references: [id])
+  quotaItems          MembershipPackageQuotaItem[]
   customerMemberships CustomerMembership[]
+
+  @@index([businessId, isActive])
 }
 
 model MembershipPackageQuotaItem {
-  id          String   @id @default(uuid())
-  templateId  String   @map("template_id")
-  serviceId   String   @map("service_id")
-  quotaAmount Float    @default(0) @map("quota_amount")
+  id            String @id @default(uuid())
+  templateId    String @map("template_id")
+  serviceId     String @map("service_id")
+  quotaAmount   Float  @default(0) @map("quota_amount")
   deductionRate Float  @default(1) @map("deduction_rate")
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt     DateTime @default(now()) @map("created_at")
 
-  template    MembershipPackageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  service     Service  @relation(fields: [serviceId], references: [id])
+  template MembershipPackageTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  service  Service                   @relation(fields: [serviceId], references: [id])
 
   @@unique([templateId, serviceId])
 }
@@ -193,61 +265,71 @@ enum MembershipStatus {
 }
 
 model CustomerMembership {
-  id          String   @id @default(uuid())
-  businessId  String   @map("business_id")
-  customerId  String   @map("customer_id")
-  templateId  String   @map("template_id")
-  startAt     DateTime @map("start_at")
-  endAt       DateTime @map("end_at")
-  status      MembershipStatus @default(ACTIVE)
-  createdAt   DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  customerId String   @map("customer_id")
+  templateId String   @map("template_id")
 
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  template    MembershipPackageTemplate @relation(fields: [templateId], references: [id])
-  balances    CustomerMembershipQuotaBalance[]
-  usageLogs   CustomerMembershipUsageLog[]
+  startAt DateTime @map("start_at")
+  endAt   DateTime @map("end_at")
+  status  MembershipStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  customer     Customer                       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  template     MembershipPackageTemplate      @relation(fields: [templateId], references: [id])
+  balances     CustomerMembershipQuotaBalance[]
+  usageLogs    CustomerMembershipUsageLog[]
   transactions Transaction[]
+
+  @@index([businessId, status])
+  @@index([customerId, status])
 }
 
 model CustomerMembershipQuotaBalance {
-  id                   String   @id @default(uuid())
-  customerMembershipId String   @map("customer_membership_id")
-  serviceId            String   @map("service_id")
-  initialQty           Float    @map("initial_qty")
-  remainingQty         Float    @map("remaining_qty")
+  id                   String @id @default(uuid())
+  customerMembershipId String @map("customer_membership_id")
+  serviceId            String @map("service_id")
+  initialQty           Float  @map("initial_qty")
+  remainingQty         Float  @map("remaining_qty")
   createdAt            DateTime @default(now()) @map("created_at")
 
-  customerMembership   CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
-  service              Service @relation(fields: [serviceId], references: [id])
+  customerMembership CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
+  service            Service            @relation(fields: [serviceId], references: [id])
 
   @@unique([customerMembershipId, serviceId])
 }
 
 model CustomerMembershipUsageLog {
-  id                   String   @id @default(uuid())
-  businessId           String   @map("business_id")
-  customerMembershipId String   @map("customer_membership_id")
-  transactionId        String   @map("transaction_id")
-  serviceId            String   @map("service_id")
-  usedQty              Float    @map("used_qty")
-  coveredAmount        Int      @map("covered_amount")
-  payableAmount        Int      @map("payable_amount")
+  id                   String @id @default(uuid())
+  businessId           String @map("business_id")
+  customerMembershipId String @map("customer_membership_id")
+  transactionId        String @map("transaction_id")
+  serviceId            String @map("service_id")
+  usedQty              Float  @map("used_qty")
+  coveredAmount        Int    @map("covered_amount")
+  payableAmount        Int    @map("payable_amount")
   createdAt            DateTime @default(now()) @map("created_at")
 
-  customerMembership   CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
-  transaction          Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  service              Service @relation(fields: [serviceId], references: [id])
+  customerMembership CustomerMembership @relation(fields: [customerMembershipId], references: [id], onDelete: Cascade)
+  transaction        Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  service            Service            @relation(fields: [serviceId], references: [id])
+
+  @@index([businessId, createdAt])
 }
 
-model WhatsAppSession {
-  businessId    String    @id @map("business_id")
-  phoneNumber   String?   @map("phone_number")
-  status        String    @default("disconnected")
-  connectedVia  String?   @map("connected_via")
-  lastConnected DateTime? @map("last_connected")
-  lastError     String?   @db.Text @map("last_error")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+// =============================================
+// ENUMS
+// =============================================
+enum Status {
+  PENDING
+  PROSES
+  SELESAI
+  DIAMBIL
+}
 
-  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+enum Payment {
+  CASH
+  QRIS
 }

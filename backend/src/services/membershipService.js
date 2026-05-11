@@ -98,18 +98,23 @@ const consumeQuotaAndLog = async ({
   });
 };
 
-const activateCustomerMembership = async ({ businessId, customerId, startAt = new Date(), tx = prisma }) => {
+const activateCustomerMembership = async ({ businessId, customerId, templateId, startAt = new Date(), tx = prisma }) => {
   const [setting, activeTemplate] = await Promise.all([
     tx.businessSetting.findUnique({ where: { businessId } }),
-    tx.membershipPackageTemplate.findFirst({
-      where: { businessId, isActive: true },
-      include: { quotaItems: true },
-      orderBy: { createdAt: 'desc' },
-    }),
+    templateId 
+      ? tx.membershipPackageTemplate.findUnique({ 
+          where: { id: templateId }, 
+          include: { quotaItems: true } 
+        })
+      : tx.membershipPackageTemplate.findFirst({
+          where: { businessId, isActive: true },
+          include: { quotaItems: true },
+          orderBy: { createdAt: 'desc' },
+        }),
   ]);
 
   if (!activeTemplate) {
-    throw new Error('Template paket membership belum dikonfigurasi.');
+    throw new Error('Template paket membership tidak ditemukan.');
   }
 
   const durationDays = setting?.membershipDurationDays || activeTemplate.durationDays || 30;

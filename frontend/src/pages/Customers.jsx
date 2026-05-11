@@ -15,7 +15,10 @@ export default function Customers() {
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '' });
   const [showAddMembershipForm, setShowAddMembershipForm] = useState(false);
-  const [newMembershipCustomer, setNewMembershipCustomer] = useState({ name: '', phone: '', address: '' });
+  const [newMembershipCustomer, setNewMembershipCustomer] = useState({ name: '', phone: '', address: '', templateId: '' });
+  const [membershipPackages, setMembershipPackages] = useState([]);
+  const [showPackageModal, setShowPackageModal] = useState(false);
+  const [targetCustomerId, setTargetCustomerId] = useState(null);
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isOwner = user.role === 'OWNER';
@@ -49,6 +52,9 @@ export default function Customers() {
 
   useEffect(() => {
     fetchCustomers();
+    api.get('/settings').then(res => {
+      setMembershipPackages(res.data.membershipPackages || []);
+    });
   }, [page, debouncedSearch, membershipFilter]);
 
   const handleEdit = (c) => {
@@ -74,10 +80,20 @@ export default function Customers() {
     setLoading(false);
   };
 
-  const handleActivateMembership = async (id) => {
-    if (!window.confirm('Aktifkan paket membership untuk customer ini?')) return;
+  const handleActivateMembership = async (id, templateId = null) => {
+    if (!templateId && membershipPackages.length > 1) {
+      setTargetCustomerId(id);
+      setShowPackageModal(true);
+      return;
+    }
+
+    const tid = templateId || (membershipPackages.length > 0 ? membershipPackages[0].id : null);
+    if (!tid) return alert('Tidak ada paket membership yang tersedia.');
+
+    if (!window.confirm('Aktifkan paket membership ini?')) return;
     try {
-      await api.post(`/customers/${id}/membership/activate`, {});
+      await api.post(`/customers/${id}/membership/activate`, { templateId: tid });
+      setShowPackageModal(false);
       fetchCustomers();
     } catch (err) {
       alert(err.response?.data?.message || err.response?.data?.error || 'Gagal aktivasi membership');
@@ -120,7 +136,6 @@ export default function Customers() {
         </div>
 
         <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
-           {isOwner && (
             <button
               type="button"
               onClick={() => setShowAddMembershipForm((v) => !v)}
@@ -128,7 +143,6 @@ export default function Customers() {
             >
               {showAddMembershipForm ? 'Tutup Form' : 'Tambah Membership Baru'}
             </button>
-           )}
            <div className="relative">
              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
                <Filter size={16} className="text-slate-400"/>
@@ -158,7 +172,7 @@ export default function Customers() {
         </div>
       </div>
 
-      {isOwner && showAddMembershipForm && (
+      {showAddMembershipForm && (
         <form onSubmit={handleCreateCustomerWithMembership} className="glass-card p-6 rounded-3xl border-t-emerald-500 border-t-[6px]">
           <h2 className="text-xl font-bold text-primary mb-4">Tambah Membership Baru (Customer Baru)</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -171,6 +185,18 @@ export default function Customers() {
               <input className="premium-input bg-secondary" value={newMembershipCustomer.phone} onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, phone: e.target.value })} />
             </div>
             <div>
+              <label className="block text-sm font-bold text-slate-600 mb-2">Pilih Paket Membership</label>
+              <select 
+                required 
+                className="premium-input bg-secondary" 
+                value={newMembershipCustomer.templateId} 
+                onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, templateId: e.target.value })}
+              >
+                <option value="">-- Pilih Paket --</option>
+                {membershipPackages.map(p => <option key={p.id} value={p.id}>{p.name} ({p.durationDays} hari)</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-3">
               <label className="block text-sm font-bold text-slate-600 mb-2">Alamat (opsional)</label>
               <input className="premium-input bg-secondary" value={newMembershipCustomer.address} onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, address: e.target.value })} />
             </div>
@@ -277,7 +303,7 @@ export default function Customers() {
                       </td>
                       <td className="px-6 py-4 font-medium text-slate-500">{formatDate(c.lastTransactionAt)}</td>
                       <td className="px-6 py-4 text-right">
-                        {isOwner && (
+                        {!isActiveMembership && (
                           <button onClick={() => handleActivateMembership(c.id)} className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg mr-2">
                             Aktifkan Paket
                           </button>
@@ -285,9 +311,11 @@ export default function Customers() {
                         <button onClick={() => handleEdit(c)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors mr-2">
                            <Edit size={18} />
                         </button>
-                        <button onClick={() => handleDelete(c.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
-                           <Trash2 size={18} />
-                        </button>
+                        {isOwner && (
+                          <button onClick={() => handleDelete(c.id)} className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                             <Trash2 size={18} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -317,6 +345,33 @@ export default function Customers() {
            </div>
         </div>
       </div>
+      {/* MODAL PILIH PAKET */}
+      {showPackageModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-primary/40 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
+                 <h3 className="text-xl font-black text-primary flex items-center gap-2"><Gift className="text-emerald-500"/> Pilih Paket</h3>
+                 <button onClick={() => setShowPackageModal(false)} className="text-slate-400 hover:text-rose-500"><X size={24}/></button>
+              </div>
+              <div className="p-6 space-y-3">
+                 <p className="text-sm font-bold text-slate-500 mb-4">Silakan pilih paket membership yang ingin diaktifkan:</p>
+                 {membershipPackages.map(p => (
+                   <button 
+                     key={p.id}
+                     onClick={() => handleActivateMembership(targetCustomerId, p.id)}
+                     className="w-full p-4 rounded-2xl border-2 border-emerald-100 hover:border-emerald-500 hover:bg-emerald-50 text-left transition-all group"
+                   >
+                     <div className="flex justify-between items-center">
+                        <span className="font-black text-primary group-hover:text-emerald-700">{p.name}</span>
+                        <ChevronRight size={20} className="text-emerald-300 group-hover:translate-x-1 transition-transform"/>
+                     </div>
+                     <span className="text-xs font-bold text-slate-400">Durasi: {p.durationDays} hari</span>
+                   </button>
+                 ))}
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 }

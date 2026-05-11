@@ -41,7 +41,6 @@ export default function Tracking() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('ALL');
   const [toast, setToast] = useState(null); // { type, message }
-  const [resending, setResending] = useState(null);
   const [overdueCount, setOverdueCount] = useState(0);
 
   const fetchTransactions = async () => {
@@ -88,20 +87,6 @@ export default function Tracking() {
     }
   };
 
-  const handleResend = async (id) => {
-    setResending(id);
-    try {
-      const res = await api.post(`/transactions/${id}/resend-wa`);
-      const wa = res.data?.whatsapp;
-      if (wa?.ok) showToast('success', 'Nota digital berhasil dikirim ulang ke pelanggan.');
-      else if (wa?.skipped) showToast('warning', `Tidak terkirim: ${wa.reason}`);
-      else showToast('error', wa?.error || 'Gagal mengirim WA');
-    } catch (e) {
-      showToast('error', 'Gagal mengirim ulang WA');
-    } finally {
-      setResending(null);
-    }
-  };
 
   const filtered = filter === 'ALL'
     ? transactions
@@ -237,15 +222,6 @@ export default function Tracking() {
                    </div>
                 )}
 
-                {t.customerPhone && (
-                  <button
-                    onClick={() => handleResend(t.id)}
-                    disabled={resending === t.id}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 transition-colors text-sm disabled:opacity-50"
-                  >
-                    <MessageCircle size={14}/> {resending === t.id ? 'Mengirim...' : 'Kirim Ulang Nota WA'}
-                  </button>
-                )}
               </div>
             </div>
           );
