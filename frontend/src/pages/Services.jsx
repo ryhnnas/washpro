@@ -114,7 +114,19 @@ export default function Services() {
              </div>
              <div>
                <label className="block text-xs sm:text-sm font-bold text-slate-600 mb-1.5 sm:mb-2">Unit (Satuan Ukur)</label>
-               <input required placeholder="Contoh: kg, pcs, m2" className="premium-input bg-secondary text-xs sm:text-sm" value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} />
+               <select 
+                required 
+                className="premium-input bg-secondary text-xs sm:text-sm" 
+                value={formData.unit} 
+                onChange={e => setFormData({...formData, unit: e.target.value})}
+              >
+                <option value="kg">kg (Kiloan)</option>
+                <option value="pcs">pcs (Satuan)</option>
+                <option value="m2">m2 (Karpet)</option>
+                <option value="pasang">pasang (Sepatu)</option>
+                <option value="set">set (Seprai/Bedcover)</option>
+                <option value="box">box</option>
+              </select>
              </div>
              <div>
                <label className="block text-xs sm:text-sm font-bold text-slate-600 mb-1.5 sm:mb-2">Estimasi Durasi</label>

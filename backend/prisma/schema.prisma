@@ -156,6 +156,7 @@ model BusinessSetting {
   membershipPackageName   String  @default("Paket Membership") @map("membership_package_name")
   membershipDurationDays  Int     @default(30) @map("membership_duration_days")
   whatsappReceiptTemplate String? @db.Text @map("whatsapp_receipt_template")
+  whatsappNotificationStates String? @db.Text @map("whatsapp_notification_states")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

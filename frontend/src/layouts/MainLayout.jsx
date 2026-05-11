@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users, UserPlus } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users, UserPlus, User } from 'lucide-react';
 import api from '../lib/axios';
 import logo from '../assets/logo.png';
 
@@ -127,7 +127,7 @@ export default function MainLayout() {
         </nav>
 
         <div className="p-2 sm:p-3 lg:p-4 m-2 sm:m-3 lg:m-4 rounded-lg sm:rounded-2xl bg-primary-light border border-white/10 shadow-inner">
-          <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
+          <NavLink to="/profile" className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 hover:bg-white/5 p-1 rounded-xl transition-colors">
             <div className="w-8 sm:w-10 h-8 sm:h-10 rounded-lg sm:rounded-xl bg-tertiary border border-tertiary flex items-center justify-center text-primary font-bold text-xs sm:text-lg flex-shrink-0">
               {user?.name?.charAt(0).toUpperCase()}
             </div>
@@ -135,7 +135,7 @@ export default function MainLayout() {
               <p className="text-xs sm:text-sm font-bold text-white truncate">{user?.name}</p>
               <p className="text-[10px] sm:text-xs text-slate-300 font-medium truncate tracking-wide">{user?.role}</p>
             </div>
-          </div>
+          </NavLink>
           <button 
             onClick={handleLogout}
             className="w-full flex justify-center items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 bg-rose-500/20 hover:bg-rose-500 hover:text-white text-rose-200 rounded-lg sm:rounded-xl transition-colors font-bold shadow-inner border border-rose-500/20 text-xs sm:text-sm"
@@ -168,8 +168,11 @@ export default function MainLayout() {
                 <p className="text-xs sm:text-sm font-extrabold text-primary">Selamat bekerja, {user?.name?.split(' ')[0]}</p>
                 <p className="text-[10px] sm:text-xs text-slate-500 font-medium">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
              </div>
-             <button className="w-8 sm:w-10 h-8 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl bg-primary/5 hover:bg-primary/10 text-primary transition-colors border border-primary/5">
-                <Bell size={16} className="sm:w-4.5 sm:h-4.5" />
+             <button 
+                onClick={() => navigate('/profile')}
+                className="w-8 sm:w-10 h-8 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl bg-primary/5 hover:bg-primary/10 text-primary transition-colors border border-primary/5"
+             >
+                <User size={16} className="sm:w-4.5 sm:h-4.5" />
              </button>
           </div>
         </header>

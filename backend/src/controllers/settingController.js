@@ -32,9 +32,10 @@ const getSettings = async (req, res) => {
         SELESAI: null,
         DIAMBIL: null,
       },
+      whatsappNotificationStates: ['PENDING', 'SELESAI'],
     };
     try {
-      const parsed = JSON.parse(setting.staffAllowedMenus || '[]');
+      const parsed = JSON.parse(setting.staffAllowedMenus || '{}');
       if (Array.isArray(parsed)) {
         config.menus = parsed;
       } else if (typeof parsed === 'object' && parsed !== null) {
@@ -43,6 +44,15 @@ const getSettings = async (req, res) => {
         if (parsed.whatsappReceiptTemplate && !config.whatsappTemplates?.RECEIPT) {
           if (!config.whatsappTemplates) config.whatsappTemplates = {};
           config.whatsappTemplates.RECEIPT = parsed.whatsappReceiptTemplate;
+        }
+      }
+      
+      // Override from database column if exists
+      if (setting.whatsappNotificationStates) {
+        try {
+          config.whatsappNotificationStates = JSON.parse(setting.whatsappNotificationStates);
+        } catch (e) {
+          console.error('Error parsing whatsappNotificationStates from DB:', e);
         }
       }
     } catch (e) {
@@ -74,6 +84,7 @@ const getSettings = async (req, res) => {
       businessPhone: business?.phone,
       staffAllowedMenus: JSON.stringify(config.menus), // Backward compatibility for frontend
       whatsappTemplates: config.whatsappTemplates,
+      whatsappNotificationStates: config.whatsappNotificationStates,
       whatsappEnabled: isWaConnected,
       membershipPackages: membershipTemplates.map((t) => ({
         id: t.id,
@@ -108,6 +119,7 @@ const updateSettings = async (req, res) => {
     requireCustomerAddress,
     staffAllowedMenus,
     whatsappTemplates,
+    whatsappNotificationStates,
     membershipPackages, // Array of packages
   } = req.body;
 
@@ -136,6 +148,7 @@ const updateSettings = async (req, res) => {
       requireCustomerPhone,
       requireCustomerAddress,
       staffAllowedMenus: combinedConfig,
+      whatsappNotificationStates: whatsappNotificationStates ? JSON.stringify(whatsappNotificationStates) : null,
     };
     const setting = await prisma.businessSetting.upsert({
       where: { businessId },
@@ -190,6 +203,7 @@ const updateSettings = async (req, res) => {
       ...setting,
       staffAllowedMenus: JSON.stringify(staffAllowedMenus || ['CASHIER', 'TRACKING']),
       whatsappTemplates,
+      whatsappNotificationStates,
       membershipPackages: await prisma.membershipPackageTemplate.findMany({
         where: { businessId, isActive: true },
         include: {

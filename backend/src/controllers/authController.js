@@ -77,11 +77,36 @@ const login = async (req, res) => {
     res.json({
       message: "Login Berhasil",
       token,
-      user: { name: user.name, role: user.role, businessId: user.businessId }
+      user: { id: user.id, name: user.name, role: user.role, businessId: user.businessId }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
-module.exports = { registerOwner, login };
+const updateProfile = async (req, res) => {
+  const { name, password } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const data = {};
+    if (name) data.name = name;
+    if (password) {
+      data.password = await bcrypt.hash(password, 10);
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    res.json({
+      message: "Profil berhasil diperbarui",
+      user: { id: updatedUser.id, name: updatedUser.name, role: updatedUser.role, businessId: updatedUser.businessId }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { registerOwner, login, updateProfile };

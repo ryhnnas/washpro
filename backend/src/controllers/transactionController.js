@@ -262,10 +262,21 @@ const createTransaction = async (req, res) => {
     // Kirim nota digital otomatis via GOWA. Tidak menghalangi response bila gagal.
     let waResult = { ok: false, skipped: true };
     if (transaction.customerPhone) {
-      waResult = await whatsappService.sendReceipt({
-        businessId: req.user.businessId,
-        transaction,
-      });
+      // Cek setting apakah status PENDING diperbolehkan kirim WA
+      const setting = await prisma.businessSetting.findUnique({ where: { businessId: req.user.businessId } });
+      let allowedStates = ['PENDING', 'SELESAI']; // default
+      if (setting?.whatsappNotificationStates) {
+        try {
+          allowedStates = JSON.parse(setting.whatsappNotificationStates);
+        } catch (e) {}
+      }
+
+      if (allowedStates.includes('PENDING')) {
+        waResult = await whatsappService.sendReceipt({
+          businessId: req.user.businessId,
+          transaction,
+        });
+      }
     }
 
     res.status(201).json({ ...transaction, whatsapp: waResult });
@@ -293,10 +304,21 @@ const updateStatus = async (req, res) => {
 
     let waResult = { ok: false, skipped: true };
     if (notify && transaction.customerPhone) {
-      waResult = await whatsappService.sendStatusUpdate({
-        businessId: req.user.businessId,
-        transaction,
-      });
+      // Cek setting apakah status ini diperbolehkan kirim WA
+      const setting = await prisma.businessSetting.findUnique({ where: { businessId: req.user.businessId } });
+      let allowedStates = ['PENDING', 'SELESAI']; // default
+      if (setting?.whatsappNotificationStates) {
+        try {
+          allowedStates = JSON.parse(setting.whatsappNotificationStates);
+        } catch (e) {}
+      }
+
+      if (allowedStates.includes(status)) {
+        waResult = await whatsappService.sendStatusUpdate({
+          businessId: req.user.businessId,
+          transaction,
+        });
+      }
     }
 
     res.json({ ...transaction, whatsapp: waResult });

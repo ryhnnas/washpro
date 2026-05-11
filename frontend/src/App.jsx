@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import Services from './pages/Services';
 import Customers from './pages/Customers';
 import Staff from './pages/Staff';
+import Profile from './pages/Profile';
 
 // Komponen Pembatas
 const ProtectedRoute = ({ children }) => {
@@ -44,6 +45,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="services" element={<Services />} />
           <Route path="/staff" element={<Staff />} />
+          <Route path="/profile" element={<Profile />} />
         </Route>
       </Routes>
     </Router>
