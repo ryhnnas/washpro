@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "generate": "prisma generate",
     "db:seed": "prisma db seed"
   },
   "keywords": [],

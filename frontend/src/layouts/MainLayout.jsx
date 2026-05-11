@@ -149,11 +149,12 @@ export default function MainLayout() {
             >
               <Menu size={20} className="sm:w-6 sm:h-6" />
             </button>
-            <h2 className="text-sm sm:text-lg lg:text-xl font-extrabold text-primary hidden md:block truncate">{currentRoute}</h2>
+            {/* Hapus nama route di header karena sudah ada di konten halaman */}
+            <h2 className="text-sm sm:text-lg lg:text-xl font-extrabold text-primary hidden md:block truncate"></h2>
           </div>
           <div className="flex items-center gap-2 sm:gap-4">
              <div className="hidden sm:block text-right">
-                <p className="text-xs sm:text-sm font-extrabold text-primary">Selamat bekerja,</p>
+                <p className="text-xs sm:text-sm font-extrabold text-primary">Selamat bekerja, {user?.name?.split(' ')[0]}</p>
                 <p className="text-[10px] sm:text-xs text-slate-500 font-medium">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
              </div>
              <button className="w-8 sm:w-10 h-8 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl bg-primary/5 hover:bg-primary/10 text-primary transition-colors border border-primary/5">

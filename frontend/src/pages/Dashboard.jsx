@@ -62,46 +62,45 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards (4 cards: revenue, transactions, queue, customers) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 lg:gap-6">
+      {/* Stat Cards Section */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
         <StatCard
-          icon={<DollarSign size={28} />}
-          label="Total Pendapatan"
+          icon={<DollarSign size={24} />}
+          label="Pendapatan"
           value={`Rp ${stats.totalRevenue.toLocaleString('id-ID')}`}
           tone="primary"
         />
         <StatCard
-          icon={<FileText size={28} strokeWidth={2.5}/>}
-          label="Total Transaksi"
+          icon={<FileText size={24} />}
+          label="Transaksi"
           value={stats.totalTransactions}
           tone="tertiary"
         />
         <StatCard
-          icon={<Clock size={28} />}
+          icon={<Clock size={24} />}
           label="Antrian Aktif"
           value={stats.activeQueue || 0}
           tone="amber"
-          hint="Status PENDING + PROSES"
         />
         <StatCard
-          icon={<Users size={28} />}
+          icon={<Users size={24} />}
           label="Total Pelanggan"
           value={stats.totalCustomers || 0}
           tone="emerald"
-          hint="Database CRM bisnis"
         />
-        <Link to="/tracking" className="block">
+        <Link to="/tracking" className="block group/link">
           <StatCard
-            icon={<TriangleAlert size={28} />}
-            label="Order Terlambat"
+            icon={<TriangleAlert size={24} />}
+            label="Keterlambatan"
             value={overdueTotal}
-            tone={overdueTotal > 0 ? 'amber' : 'primary'}
-            hint={overdueTotal > 0 ? 'Perlu ditindaklanjuti' : 'Tidak ada keterlambatan'}
+            tone={overdueTotal > 0 ? 'danger' : 'slate'}
+            isClickable
           />
         </Link>
       </div>
 
       {/* Revenue Trend Chart - sesuai proposal: "grafik pendapatan" */}
-      <div className="glass-card p-4 sm:p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
+      <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-shadow hover:shadow-md">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <h3 className="text-xl font-black text-primary flex items-center gap-3">
             <div className="p-2 bg-tertiary/20 rounded-lg text-tertiary-hover"><TrendingUp size={20} /></div>
@@ -144,8 +143,8 @@ export default function Dashboard() {
       </div>
 
       {/* Pie + Status grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
-        <div className="glass-card p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-shadow hover:shadow-md">
           <h3 className="text-xl font-black text-primary mb-6 flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg text-primary"><TrendingUp size={20} /></div>
             Cash vs QRIS
@@ -174,7 +173,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="glass-card p-4 sm:p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
+        <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-shadow hover:shadow-md">
           <h3 className="text-lg sm:text-xl font-black text-primary mb-4 sm:mb-6 flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600"><Clock size={20} /></div>
             Distribusi Status Pengerjaan
@@ -206,8 +205,8 @@ export default function Dashboard() {
       </div>
 
       {/* Pesanan Hari Ini */}
-      <div className="glass-card rounded-3xl bg-white border border-slate-200 overflow-hidden">
-        <div className="p-4 sm:p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100">
+      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
+        <div className="p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-50">
           <h3 className="text-xl font-black text-primary">Pesanan Masuk (Hari Ini)</h3>
           <Link to="/reports" className="text-sm font-bold text-primary hover:text-tertiary transition-colors flex items-center gap-1">
             Lihat Semua Laporan <ArrowRight size={16} />
@@ -268,25 +267,61 @@ export default function Dashboard() {
 }
 
 const TONE_MAP = {
-  primary: { iconBg: 'from-primary to-primary-light', iconText: 'text-white', shadow: 'shadow-primary/30', accentBg: 'bg-primary/5' },
-  tertiary: { iconBg: 'from-tertiary to-[#d4b300]', iconText: 'text-primary', shadow: 'shadow-tertiary/30', accentBg: 'bg-tertiary/10' },
-  amber: { iconBg: 'from-amber-400 to-amber-500', iconText: 'text-white', shadow: 'shadow-amber-500/30', accentBg: 'bg-amber-100' },
-  emerald: { iconBg: 'from-emerald-400 to-emerald-600', iconText: 'text-white', shadow: 'shadow-emerald-500/30', accentBg: 'bg-emerald-100' },
+  primary: { 
+    iconBg: 'bg-primary/10', 
+    iconText: 'text-primary', 
+    barColor: 'bg-primary',
+    glow: 'group-hover:shadow-primary/20'
+  },
+  tertiary: { 
+    iconBg: 'bg-tertiary/20', 
+    iconText: 'text-tertiary-hover', 
+    barColor: 'bg-tertiary',
+    glow: 'group-hover:shadow-tertiary/20'
+  },
+  amber: { 
+    iconBg: 'bg-amber-100', 
+    iconText: 'text-amber-600', 
+    barColor: 'bg-amber-500',
+    glow: 'group-hover:shadow-amber-500/20'
+  },
+  emerald: { 
+    iconBg: 'bg-emerald-100', 
+    iconText: 'text-emerald-600', 
+    barColor: 'bg-emerald-500',
+    glow: 'group-hover:shadow-emerald-500/20'
+  },
+  danger: { 
+    iconBg: 'bg-red-100', 
+    iconText: 'text-red-600', 
+    barColor: 'bg-red-500',
+    glow: 'group-hover:shadow-red-500/20'
+  },
+  slate: { 
+    iconBg: 'bg-slate-100', 
+    iconText: 'text-slate-600', 
+    barColor: 'bg-slate-400',
+    glow: 'group-hover:shadow-slate-400/20'
+  },
 };
 
-function StatCard({ icon, label, value, tone = 'primary', hint }) {
+function StatCard({ icon, label, value, tone = 'primary', isClickable }) {
   const t = TONE_MAP[tone] || TONE_MAP.primary;
   return (
-    <div className="glass-card p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl flex items-center gap-3 sm:gap-5 group hover:-translate-y-1 transition-all duration-300 relative overflow-hidden bg-white">
-      <div className={`absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 ${t.accentBg} rounded-full blur-3xl -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 transition-transform group-hover:scale-150 duration-500 pointer-events-none`}></div>
-      <div className={`w-12 sm:w-14 h-12 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${t.iconBg} flex items-center justify-center ${t.iconText} shadow-lg ${t.shadow} group-hover:scale-110 transition-transform duration-300`}>
+    <div className={`group relative bg-white rounded-[2rem] p-5 sm:p-7 border border-slate-100 shadow-sm transition-all duration-300 hover:shadow-xl ${t.glow} ${isClickable ? 'hover:border-primary/20' : ''} flex flex-col justify-between min-h-[160px] sm:min-h-[180px]`}>
+      <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${t.iconBg} ${t.iconText} flex items-center justify-center transition-transform duration-300 group-hover:scale-110 mb-4 sm:mb-6`}>
         {icon}
       </div>
-      <div className="min-w-0">
-        <p className="text-slate-500 font-bold text-[10px] sm:text-xs uppercase tracking-wider mb-0.5 sm:mb-1 truncate">{label}</p>
-        <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-primary truncate">{value}</h2>
-        {hint && <p className="text-[9px] sm:text-[11px] text-slate-400 font-semibold mt-0.5 truncate">{hint}</p>}
+      
+      <div className="space-y-1 sm:space-y-2">
+        <p className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase tracking-[0.15em] leading-none">{label}</p>
+        <h2 className="text-lg sm:text-xl md:text-2xl font-black text-primary break-words leading-tight">
+          {value}
+        </h2>
       </div>
+      
+      {/* Subtle background decoration */}
+      <div className={`absolute -bottom-2 -right-2 w-16 h-16 ${t.barColor} opacity-[0.03] rounded-full blur-xl group-hover:opacity-[0.1] transition-opacity duration-500`}></div>
     </div>
   );
 }
