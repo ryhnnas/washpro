@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users, UserPlus } from 'lucide-react';
 import api from '../lib/axios';
 import logo from '../assets/logo.png';
 
@@ -56,7 +56,7 @@ export default function MainLayout() {
     }
   }
 
-  const currentRoute = [...navItems, { name: 'Pengaturan', path: '/settings' }, { name: 'Daftar Layanan', path: '/services' }].find(n => n.path === location.pathname)?.name || '';
+  const currentRoute = [...navItems, { name: 'Pengaturan', path: '/settings' }, { name: 'Daftar Layanan', path: '/services' }, { name: 'Kelola Staf', path: '/staff' }].find(n => n.path === location.pathname)?.name || '';
 
   return (
     <div className="flex h-screen overflow-hidden bg-secondary text-primary font-sans">
@@ -117,6 +117,10 @@ export default function MainLayout() {
               <NavLink to="/settings" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
                 <div className={`transition-transform duration-300 group-hover:scale-110`}><Settings size={18} className="sm:w-5 sm:h-5" /></div>
                 <span className="truncate">Pengaturan Menu</span>
+              </NavLink>
+              <NavLink to="/staff" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
+                <div className={`transition-transform duration-300 group-hover:scale-110`}><UserPlus size={18} className="sm:w-5 sm:h-5" /></div>
+                <span className="truncate">Kelola Staf</span>
               </NavLink>
             </>
           )}

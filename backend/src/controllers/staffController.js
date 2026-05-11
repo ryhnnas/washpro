@@ -89,4 +89,44 @@ const deleteStaff = async (req, res) => {
   }
 };
 
-module.exports = { getStaff, createStaff, deleteStaff };
+// Update staff (Hanya bisa diakses owner)
+const updateStaff = async (req, res) => {
+  const { id } = req.params;
+  const { name, email, password } = req.body;
+  try {
+    // Validasi OWNER
+    if (req.user.role !== 'OWNER') {
+      return res.status(403).json({ message: "Akses ditolak. Bukan pemilik." });
+    }
+
+    const businessId = req.user.businessId;
+
+    // Pastikan staff yg mau diupdate ada di bisnis yg sama
+    const staff = await prisma.user.findFirst({
+      where: { id: id, businessId: businessId, role: 'STAFF' }
+    });
+
+    if (!staff) {
+      return res.status(404).json({ message: "Staf tidak ditemukan." });
+    }
+
+    const updateData = { name, email };
+    
+    // Jika password diisi, hash password baru
+    if (password && password.trim() !== "") {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    const updatedStaff = await prisma.user.update({
+      where: { id: id },
+      data: updateData,
+      select: { id: true, name: true, email: true, updatedAt: true }
+    });
+
+    res.json({ message: "Staf berhasil diperbarui", data: updatedStaff });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { getStaff, createStaff, deleteStaff, updateStaff };

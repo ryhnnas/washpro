@@ -7,7 +7,7 @@ import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { Chart, registerables } from 'chart.js';
@@ -368,6 +368,7 @@ export default function Reports() {
                   ))}
                 </Pie>
                 <Tooltip />
+                <Legend layout="vertical" align="right" verticalAlign="middle" />
               </PieChart>
             </ResponsiveContainer>
           </div>

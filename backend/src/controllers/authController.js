@@ -57,14 +57,12 @@ const registerOwner = async (req, res) => {
 
 // LOGIC LOGIN
 const login = async (req, res) => {
-  const { email, password, loginRole = "OWNER" } = req.body;
+  const { email, password } = req.body;
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
 
-    if (user.role !== loginRole) {
-      return res.status(403).json({ message: `Gagal masuk. Akun ini terdaftar sebagai ${user.role}, bukan ${loginRole}.` });
-    }
+
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ message: "Password salah" });
