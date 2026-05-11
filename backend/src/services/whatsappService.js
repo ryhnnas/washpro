@@ -53,9 +53,10 @@ const checkConnectionStatus = async (businessId) => {
 
     return { status: isConnected ? 'connected' : 'disconnected', detail: data.results || data.data };
   } catch (err) {
-    await prisma.whatsAppSession.update({
+    await prisma.whatsAppSession.upsert({
       where: { businessId },
-      data: { status: 'error', lastError: err.message },
+      create: { businessId, status: 'error', lastError: err.message },
+      update: { status: 'error', lastError: err.message },
     }).catch(() => { });
     return { status: 'error', detail: err.message };
   }

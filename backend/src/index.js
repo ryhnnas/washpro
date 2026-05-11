@@ -10,6 +10,7 @@ const settingRoutes = require('./routes/settingRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const staffRoutes = require('./routes/staffRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 const { startHealthCheck } = require('./services/whatsappService');
 const whatsappService = require('./services/whatsappService');
 const whatsappQueueService = require('./services/whatsappQueueService');
@@ -27,6 +28,7 @@ app.use('/api/settings', settingRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Test Route
 app.get('/', (req, res) => res.send("WashPro API Active"));

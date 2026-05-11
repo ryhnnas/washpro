@@ -324,4 +324,156 @@ const resendReceipt = async (req, res) => {
   }
 };
 
-module.exports = { getTransactions, getOverdueTransactions, createTransaction, updateStatus, resendReceipt };
+const getExportData = async (req, res) => {
+  try {
+    const { search = '', startDate, endDate } = req.query;
+    const businessId = req.user.businessId;
+
+    let whereClause = { businessId };
+
+    if (search) {
+      whereClause.OR = [
+        { customerName: { contains: search } },
+        { serviceName: { contains: search } },
+        { status: { contains: search } },
+      ];
+    }
+
+    if (startDate && endDate) {
+      whereClause.startDate = { gte: new Date(startDate), lte: new Date(endDate) };
+    }
+
+    const [transactions, business] = await Promise.all([
+      prisma.transaction.findMany({
+        where: whereClause,
+        orderBy: { startDate: 'desc' },
+        include: {
+          customer: { select: { name: true } },
+        },
+      }),
+      prisma.business.findUnique({
+        where: { id: businessId },
+        select: { name: true, address: true, phone: true },
+      }),
+    ]);
+
+    // Aggregate Summary
+    const totalTransactions = transactions.length;
+    const totalRevenue = transactions.reduce((sum, t) => sum + (t.payableAmount || 0), 0);
+    
+    // Status Breakdown
+    const statusBreakdown = transactions.reduce((acc, t) => {
+      acc[t.status] = (acc[t.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Service Breakdown
+    const serviceBreakdown = {};
+    transactions.forEach((t) => {
+      const items = Array.isArray(t.lineItems) ? t.lineItems : [{ serviceName: t.serviceName, qty: t.weight, lineTotal: t.totalPrice }];
+      items.forEach((item) => {
+        const name = item.serviceName || 'Unknown';
+        if (!serviceBreakdown[name]) {
+          serviceBreakdown[name] = { name, totalQty: 0, totalRevenue: 0 };
+        }
+        serviceBreakdown[name] = {
+          ...serviceBreakdown[name],
+          totalQty: serviceBreakdown[name].totalQty + (parseFloat(item.qty) || 0),
+          totalRevenue: serviceBreakdown[name].totalRevenue + (parseInt(item.lineTotal) || 0),
+        };
+      });
+    });
+
+    // Average Revenue per Day
+    let avgRevenuePerDay = 0;
+    if (startDate && endDate && totalRevenue > 0) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end - start);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+      avgRevenuePerDay = Math.round(totalRevenue / diffDays);
+    } else if (totalRevenue > 0) {
+      avgRevenuePerDay = totalRevenue; // Fallback if no date range
+    }
+
+    res.json({
+      business,
+      summary: {
+        totalTransactions,
+        totalRevenue,
+        avgRevenuePerDay,
+        statusBreakdown,
+      },
+      serviceBreakdown: Object.values(serviceBreakdown),
+      transactions,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getReportCharts = async (req, res) => {
+  try {
+    const { startDate, endDate, search = '' } = req.query;
+    const businessId = req.user.businessId;
+
+    let whereClause = { businessId };
+    if (startDate && endDate) {
+      whereClause.startDate = { gte: new Date(startDate), lte: new Date(endDate) };
+    }
+    if (search) {
+      whereClause.OR = [
+        { customerName: { contains: search } },
+        { serviceName: { contains: search } },
+      ];
+    }
+
+    const transactions = await prisma.transaction.findMany({
+      where: whereClause,
+      orderBy: { startDate: 'asc' },
+    });
+
+    // 1. Daily Revenue (Trend)
+    const revenueMap = {};
+    transactions.forEach(t => {
+      const date = new Date(t.startDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+      revenueMap[date] = (revenueMap[date] || 0) + (t.payableAmount || 0);
+    });
+    const dailyRevenue = Object.entries(revenueMap).map(([date, revenue]) => ({ date, revenue }));
+
+    // 2. Status Breakdown
+    const statusMap = {};
+    transactions.forEach(t => {
+      statusMap[t.status] = (statusMap[t.status] || 0) + 1;
+    });
+    const statusBreakdown = Object.entries(statusMap).map(([status, count]) => ({ status, count }));
+
+    // 3. Top Services
+    const serviceMap = {};
+    transactions.forEach(t => {
+      const items = Array.isArray(t.lineItems) ? t.lineItems : [{ serviceName: t.serviceName, lineTotal: t.totalPrice }];
+      items.forEach(item => {
+        const name = item.serviceName || 'Unknown';
+        if (!serviceMap[name]) serviceMap[name] = { name, totalRevenue: 0 };
+        serviceMap[name].totalRevenue += (parseInt(item.lineTotal) || 0);
+      });
+    });
+    const topServices = Object.values(serviceMap)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 5);
+
+    res.json({ dailyRevenue, statusBreakdown, topServices });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { 
+  getTransactions, 
+  getOverdueTransactions, 
+  createTransaction, 
+  updateStatus, 
+  resendReceipt, 
+  getExportData,
+  getReportCharts
+};
