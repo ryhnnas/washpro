@@ -51,11 +51,11 @@ export default function LandingPage() {
               Sistem Point of Sale Laundry #1 di Indonesia
             </div>
             
-            <h1 className="text-5xl lg:text-7xl font-black tracking-tight leading-[1.1] mb-6">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-black tracking-tight leading-[1.1] mb-4 sm:mb-6">
               Kelola Bisnis Laundry Anda Semakin <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-light border-b-4 border-tertiary">Brilian</span>
             </h1>
             
-            <p className="text-lg lg:text-xl text-slate-600 mb-10 max-w-2xl mx-auto font-medium">
+            <p className="text-sm sm:text-base md:text-lg lg:text-xl text-slate-600 mb-6 sm:mb-10 max-w-2xl mx-auto font-medium">
               Tingkatkan margin, pantau kasir, catat transaksi secara digital, dan layani pelanggan lebih cepat dengan WashPro web POS eksklusif.
             </p>
 

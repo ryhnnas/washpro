@@ -62,7 +62,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards (4 cards: revenue, transactions, queue, customers) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 lg:gap-6">
         <StatCard
           icon={<DollarSign size={28} />}
           label="Total Pendapatan"
@@ -101,7 +101,7 @@ export default function Dashboard() {
       </div>
 
       {/* Revenue Trend Chart - sesuai proposal: "grafik pendapatan" */}
-      <div className="glass-card p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
+      <div className="glass-card p-4 sm:p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <h3 className="text-xl font-black text-primary flex items-center gap-3">
             <div className="p-2 bg-tertiary/20 rounded-lg text-tertiary-hover"><TrendingUp size={20} /></div>
@@ -111,7 +111,7 @@ export default function Dashboard() {
             {trend.length} hari periode
           </span>
         </div>
-        <div className="h-72 w-full">
+        <div className="h-64 sm:h-72 w-full">
           {trend.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
@@ -144,13 +144,13 @@ export default function Dashboard() {
       </div>
 
       {/* Pie + Status grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
         <div className="glass-card p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
           <h3 className="text-xl font-black text-primary mb-6 flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg text-primary"><TrendingUp size={20} /></div>
             Cash vs QRIS
           </h3>
-          <div className="h-72 w-full relative">
+          <div className="h-64 sm:h-72 w-full relative">
             {stats.paymentStats.length > 0 && (stats.paymentStats[0].value + stats.paymentStats[1].value) > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -174,12 +174,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="glass-card p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
-          <h3 className="text-xl font-black text-primary mb-6 flex items-center gap-3">
+        <div className="glass-card p-4 sm:p-6 md:p-8 rounded-3xl bg-white border border-slate-200">
+          <h3 className="text-lg sm:text-xl font-black text-primary mb-4 sm:mb-6 flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600"><Clock size={20} /></div>
             Distribusi Status Pengerjaan
           </h3>
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {(stats.statusStats || []).map((s) => {
               const total = (stats.statusStats || []).reduce((a,b)=>a+b.value,0) || 1;
               const pct = Math.round((s.value/total)*100);
@@ -191,11 +191,11 @@ export default function Dashboard() {
               }[s.name] || 'bg-slate-400';
               return (
                 <div key={s.name}>
-                  <div className="flex justify-between text-sm font-bold text-primary mb-1.5">
+                  <div className="flex justify-between text-xs sm:text-sm font-bold text-primary mb-1.5">
                     <span>{s.name}</span>
                     <span className="font-black">{s.value} <span className="text-slate-400 font-medium ml-1">({pct}%)</span></span>
                   </div>
-                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2.5 sm:h-3 bg-slate-100 rounded-full overflow-hidden">
                     <div className={`${color} h-full rounded-full transition-all duration-500`} style={{ width: `${pct}%` }}></div>
                   </div>
                 </div>
@@ -207,7 +207,7 @@ export default function Dashboard() {
 
       {/* Pesanan Hari Ini */}
       <div className="glass-card rounded-3xl bg-white border border-slate-200 overflow-hidden">
-        <div className="p-6 md:p-8 flex items-center justify-between border-b border-slate-100">
+        <div className="p-4 sm:p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100">
           <h3 className="text-xl font-black text-primary">Pesanan Masuk (Hari Ini)</h3>
           <Link to="/reports" className="text-sm font-bold text-primary hover:text-tertiary transition-colors flex items-center gap-1">
             Lihat Semua Laporan <ArrowRight size={16} />
@@ -216,32 +216,32 @@ export default function Dashboard() {
 
         {dateFilter === 'hari_ini' ? (
           <div className="overflow-x-auto no-scrollbar">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+            <table className="w-full text-left text-xs sm:text-sm whitespace-nowrap">
               <thead className="bg-primary/5 text-primary font-black border-b border-slate-200">
                 <tr>
-                  <th className="px-8 py-4">Waktu</th>
-                  <th className="px-8 py-4">Pelanggan</th>
-                  <th className="px-8 py-4">Layanan</th>
-                  <th className="px-8 py-4 text-right">Nominal</th>
-                  <th className="px-8 py-4">Status</th>
+                  <th className="px-3 sm:px-6 md:px-8 py-3 sm:py-4">Waktu</th>
+                  <th className="px-3 sm:px-6 md:px-8 py-3 sm:py-4">Pelanggan</th>
+                  <th className="px-3 sm:px-6 md:px-8 py-3 sm:py-4">Layanan</th>
+                  <th className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 text-right">Nominal</th>
+                  <th className="px-3 sm:px-6 md:px-8 py-3 sm:py-4">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {!stats.todayOrders || stats.todayOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-8 py-10 text-center text-slate-500 font-medium">Belum ada pesanan masuk hari ini.</td>
+                    <td colSpan="5" className="px-3 sm:px-6 md:px-8 py-8 sm:py-10 text-center text-slate-500 font-medium text-xs sm:text-sm">Belum ada pesanan masuk hari ini.</td>
                   </tr>
                 ) : (
                   stats.todayOrders.map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-8 py-4 font-bold text-slate-500">
+                      <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 font-bold text-slate-500">
                         {new Date(t.startDate).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}
                       </td>
-                      <td className="px-8 py-4 font-black text-primary">{t.customerName || '-'}</td>
-                      <td className="px-8 py-4">{t.serviceName}</td>
-                      <td className="px-8 py-4 text-right font-black text-emerald-600">Rp {t.totalPrice.toLocaleString('id-ID')}</td>
-                      <td className="px-8 py-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${t.status === 'SELESAI' || t.status === 'DIAMBIL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 font-black text-primary truncate">{t.customerName || '-'}</td>
+                      <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 truncate">{t.serviceName}</td>
+                      <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 text-right font-black text-emerald-600 text-xs sm:text-sm">Rp {t.totalPrice.toLocaleString('id-ID')}</td>
+                      <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4">
+                        <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${t.status === 'SELESAI' || t.status === 'DIAMBIL' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                           {t.status}
                         </span>
                       </td>
@@ -277,15 +277,15 @@ const TONE_MAP = {
 function StatCard({ icon, label, value, tone = 'primary', hint }) {
   const t = TONE_MAP[tone] || TONE_MAP.primary;
   return (
-    <div className="glass-card p-6 rounded-3xl flex items-center gap-5 group hover:-translate-y-1 transition-all duration-300 relative overflow-hidden bg-white">
-      <div className={`absolute top-0 right-0 w-32 h-32 ${t.accentBg} rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-500 pointer-events-none`}></div>
-      <div className={`w-14 h-14 shrink-0 rounded-2xl bg-gradient-to-br ${t.iconBg} flex items-center justify-center ${t.iconText} shadow-lg ${t.shadow} group-hover:scale-110 transition-transform duration-300`}>
+    <div className="glass-card p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl flex items-center gap-3 sm:gap-5 group hover:-translate-y-1 transition-all duration-300 relative overflow-hidden bg-white">
+      <div className={`absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 ${t.accentBg} rounded-full blur-3xl -mr-8 sm:-mr-10 -mt-8 sm:-mt-10 transition-transform group-hover:scale-150 duration-500 pointer-events-none`}></div>
+      <div className={`w-12 sm:w-14 h-12 sm:h-14 shrink-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${t.iconBg} flex items-center justify-center ${t.iconText} shadow-lg ${t.shadow} group-hover:scale-110 transition-transform duration-300`}>
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1 truncate">{label}</p>
-        <h2 className="text-2xl lg:text-3xl font-black text-primary truncate">{value}</h2>
-        {hint && <p className="text-[11px] text-slate-400 font-semibold mt-0.5 truncate">{hint}</p>}
+        <p className="text-slate-500 font-bold text-[10px] sm:text-xs uppercase tracking-wider mb-0.5 sm:mb-1 truncate">{label}</p>
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-primary truncate">{value}</h2>
+        {hint && <p className="text-[9px] sm:text-[11px] text-slate-400 font-semibold mt-0.5 truncate">{hint}</p>}
       </div>
     </div>
   );
