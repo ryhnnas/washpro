@@ -345,7 +345,7 @@ export default function Reports() {
             <h3 className="font-bold text-lg text-primary">Pendapatan Harian</h3>
           </div>
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <LineChart data={dailyRevenue}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
@@ -360,7 +360,7 @@ export default function Reports() {
         <div ref={pieChartRef} className="glass-card p-6 rounded-3xl bg-white border border-slate-200">
           <h3 className="font-bold text-lg text-primary mb-4">Distribusi Status Transaksi</h3>
           <div className="h-72 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <PieChart>
                 <Pie data={statusBreakdown} cx="50%" cy="50%" innerRadius={70} outerRadius={110} dataKey="count" nameKey="status">
                   {statusBreakdown.map((entry, index) => (
@@ -377,7 +377,7 @@ export default function Reports() {
         <div ref={barChartRef} className="glass-card p-6 rounded-3xl bg-white border border-slate-200 lg:col-span-2">
           <h3 className="font-bold text-lg text-primary mb-4">Top 5 Layanan Terlaris</h3>
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <BarChart data={topServices}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />

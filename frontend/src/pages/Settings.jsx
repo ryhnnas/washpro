@@ -217,7 +217,7 @@ export default function Settings() {
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Nama Bisnis</label>
               <input 
-                value={settings.businessName} 
+                value={settings.businessName || ''} 
                 onChange={(e) => setSettings({...settings, businessName: e.target.value})} 
                 className="premium-input bg-secondary text-sm" 
                 placeholder="Contoh: WashPro / Nama Laundry Anda"
@@ -226,7 +226,7 @@ export default function Settings() {
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Nomor Telepon Bisnis</label>
               <input 
-                value={settings.businessPhone} 
+                value={settings.businessPhone || ''} 
                 onChange={(e) => setSettings({...settings, businessPhone: e.target.value})} 
                 className="premium-input bg-secondary text-sm" 
                 placeholder="0812xxxx"
@@ -235,7 +235,7 @@ export default function Settings() {
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Alamat Bisnis</label>
               <textarea 
-                value={settings.businessAddress} 
+                value={settings.businessAddress || ''} 
                 onChange={(e) => setSettings({...settings, businessAddress: e.target.value})} 
                 className="premium-input bg-secondary text-sm h-[42px] min-h-[42px] py-2" 
                 placeholder="Alamat lengkap gerai..."

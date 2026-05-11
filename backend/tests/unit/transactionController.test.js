@@ -34,7 +34,7 @@ describe('Transaction Controller - Unit Tests', () => {
 
   describe('updateStatus', () => {
     it('should update transaction status and send WA notification if allowed', async () => {
-      const mockTrans = { id: 'trans-1', businessId: 'biz-1', customerPhone: '62812' };
+      const mockTrans = { id: 'trans-1', businessId: 'biz-1', customerPhone: '62812', status: 'PROSES' };
       prisma.transaction.findFirst.mockResolvedValue(mockTrans);
       prisma.transaction.update.mockResolvedValue({ ...mockTrans, status: 'SELESAI' });
 

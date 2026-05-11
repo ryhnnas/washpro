@@ -1,9 +1,9 @@
 const { z } = require('zod');
 
 const updateSettingSchema = z.object({
-  businessName: z.string().min(1, "Nama bisnis wajib diisi").optional(),
-  businessAddress: z.string().optional(),
-  businessPhone: z.string().optional(),
+  businessName: z.string().min(1, "Nama bisnis wajib diisi").optional().nullable(),
+  businessAddress: z.string().optional().nullable(),
+  businessPhone: z.string().optional().nullable(),
   requireCustomerName: z.boolean().optional(),
   requireCustomerPhone: z.boolean().optional(),
   requireCustomerAddress: z.boolean().optional(),

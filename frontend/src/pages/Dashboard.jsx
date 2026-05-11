@@ -19,6 +19,7 @@ export default function Dashboard() {
   });
   const [trend, setTrend] = useState([]);
   const [overdueTotal, setOverdueTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   const [dateFilter, setDateFilter] = useState('hari_ini');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
@@ -26,8 +27,12 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchAll = async () => {
       try {
+        setLoading(true);
         const { startDate, endDate } = getDateRange(dateFilter, customDate);
-        if (dateFilter === 'kustom' && (!customDate.start || !customDate.end)) return;
+        if (dateFilter === 'kustom' && (!customDate.start || !customDate.end)) {
+            setLoading(false);
+            return;
+        }
 
         const [statsRes, trendRes] = await Promise.all([
           api.get(`/dashboard/stats?startDate=${startDate}&endDate=${endDate}`),
@@ -39,10 +44,27 @@ export default function Dashboard() {
         setOverdueTotal(overdueRes.data?.total || 0);
       } catch (err) {
         console.error(err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchAll();
   }, [dateFilter, customDate.start, customDate.end]);
+
+  if (loading) {
+    return (
+      <div className="space-y-8 animate-pulse">
+        <div className="h-10 bg-slate-200 rounded w-1/4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="h-32 bg-slate-200 rounded-3xl"></div>
+          <div className="h-32 bg-slate-200 rounded-3xl"></div>
+          <div className="h-32 bg-slate-200 rounded-3xl"></div>
+          <div className="h-32 bg-slate-200 rounded-3xl"></div>
+        </div>
+        <div className="h-64 bg-slate-200 rounded-3xl"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -112,7 +134,7 @@ export default function Dashboard() {
         </div>
         <div className="h-64 sm:h-72 w-full">
           {trend.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
               <AreaChart data={trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
@@ -151,7 +173,7 @@ export default function Dashboard() {
           </h3>
           <div className="h-64 sm:h-72 w-full relative">
             {stats.paymentStats.length > 0 && (stats.paymentStats[0].value + stats.paymentStats[1].value) > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <PieChart>
                   <Pie data={stats.paymentStats} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={6} dataKey="value" stroke="none">
                     {stats.paymentStats.map((entry, index) => (

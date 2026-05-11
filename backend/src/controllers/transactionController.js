@@ -294,6 +294,18 @@ const updateStatus = async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
 
+    // Validate Status Transitions
+    const VALID_TRANSITIONS = {
+      PENDING: ['PROSES'],
+      PROSES: ['SELESAI'],
+      SELESAI: ['DIAMBIL'],
+      DIAMBIL: [],
+    };
+    
+    if (existing.status !== status && !VALID_TRANSITIONS[existing.status]?.includes(status)) {
+      return res.status(400).json({ error: `Transisi status dari ${existing.status} ke ${status} tidak valid.` });
+    }
+
     const data = { status };
     if (status === 'DIAMBIL') data.endDate = new Date();
 

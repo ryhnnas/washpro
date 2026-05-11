@@ -106,7 +106,8 @@ export default function Cashier() {
     const itemPreview = selectedItems.map(({ service, qty }) => {
       const fullPrice = Math.round(qty * service.price);
       const balance = matchedCustomer.membership.balances?.find((b) => b.serviceId === service.id);
-      const pkgItem = settings?.membershipPackage?.items?.find((i) => i.serviceId === service.id);
+      const template = settings?.membershipPackages?.find(p => p.id === matchedCustomer.membership.templateId);
+      const pkgItem = template?.items?.find((i) => i.serviceId === service.id);
       const rate = Number(pkgItem?.deductionRate || 1);
       if (!balance || rate <= 0) {
         return {
@@ -315,13 +316,13 @@ export default function Cashier() {
                {settings?.requireCustomerPhone !== false && (
                  <div>
                    <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Nomor WhatsApp</label>
-                   <input placeholder="0812xxxxxx" required type="number" className="premium-input bg-secondary p-2 sm:p-3" value={formData.customerPhone} onChange={e => setFormData({...formData, customerPhone: e.target.value})} />
+                   <input placeholder="0812xxxxxx" required type="number" className="premium-input bg-secondary p-2 sm:p-3" value={formData.customerPhone || ''} onChange={e => setFormData({...formData, customerPhone: e.target.value})} />
                  </div>
                )}
                {settings?.requireCustomerAddress && (
                  <div className="md:col-span-2">
                    <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Alamat Pengiriman</label>
-                   <textarea rows={2} placeholder="Jl. Sudirman No 2..." required className="premium-input bg-secondary resize-none p-2 sm:p-3" value={formData.customerAddress} onChange={e => setFormData({...formData, customerAddress: e.target.value})} />
+                   <textarea rows={2} placeholder="Jl. Sudirman No 2..." required className="premium-input bg-secondary resize-none p-2 sm:p-3" value={formData.customerAddress || ''} onChange={e => setFormData({...formData, customerAddress: e.target.value})} />
                  </div>
                )}
              </div>

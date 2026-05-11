@@ -16,6 +16,17 @@ const getCustomers = async (req, res) => {
       ];
     }
 
+    if (membershipStatus === 'ACTIVE') {
+      whereClause.memberships = {
+        some: {
+          status: 'ACTIVE',
+          endAt: { gte: new Date() }
+        }
+      };
+    } else if (membershipStatus === 'NONE') {
+      whereClause.memberships = { none: {} };
+    }
+
     const [customers, totalCount] = await Promise.all([
       prisma.customer.findMany({
         where: whereClause,
@@ -54,6 +65,7 @@ const getCustomers = async (req, res) => {
       membership: c.memberships[0]
         ? {
             id: c.memberships[0].id,
+            templateId: c.memberships[0].templateId,
             status: c.memberships[0].status,
             startAt: c.memberships[0].startAt,
             endAt: c.memberships[0].endAt,
@@ -70,16 +82,8 @@ const getCustomers = async (req, res) => {
       createdAt: c.createdAt,
     }));
 
-    const filtered = membershipStatus
-      ? enriched.filter((c) => {
-          if (membershipStatus === 'ACTIVE') return c.membership?.isActive;
-          if (membershipStatus === 'NONE') return !c.membership;
-          return true;
-        })
-      : enriched;
-
     res.json({
-      data: filtered,
+      data: enriched,
       pagination: {
         totalItems: totalCount,
         currentPage: parseInt(page),

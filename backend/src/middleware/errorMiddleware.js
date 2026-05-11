@@ -9,10 +9,10 @@ const errorMiddleware = (err, req, res, next) => {
     return res.status(400).json({
       status: 'fail',
       message: 'Validasi data gagal',
-      errors: err.errors.map(e => ({
+      errors: Array.isArray(err.errors) ? err.errors.map(e => ({
         path: e.path.join('.'),
         message: e.message
-      }))
+      })) : []
     });
   }
 

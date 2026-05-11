@@ -68,6 +68,7 @@ export default function Tracking() {
   const handleUpdateStatus = async (id, currentStatus) => {
     const next = NEXT_STATUS[currentStatus];
     if (!next) return;
+    if (!window.confirm(`Yakin memindahkan status pesanan ini ke ${next}?`)) return;
     try {
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: next } : t));
       const res = await api.patch(`/transactions/${id}/status`, { status: next });

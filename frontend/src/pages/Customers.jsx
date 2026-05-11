@@ -182,14 +182,14 @@ export default function Customers() {
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-600 mb-2">No WhatsApp (opsional)</label>
-              <input className="premium-input bg-secondary" value={newMembershipCustomer.phone} onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, phone: e.target.value })} />
+              <input className="premium-input bg-secondary" value={newMembershipCustomer.phone || ''} onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, phone: e.target.value })} />
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-600 mb-2">Pilih Paket Membership</label>
               <select 
                 required 
                 className="premium-input bg-secondary" 
-                value={newMembershipCustomer.templateId} 
+                value={newMembershipCustomer.templateId || ''} 
                 onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, templateId: e.target.value })}
               >
                 <option value="">-- Pilih Paket --</option>
@@ -198,7 +198,7 @@ export default function Customers() {
             </div>
             <div className="md:col-span-3">
               <label className="block text-sm font-bold text-slate-600 mb-2">Alamat (opsional)</label>
-              <input className="premium-input bg-secondary" value={newMembershipCustomer.address} onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, address: e.target.value })} />
+              <input className="premium-input bg-secondary" value={newMembershipCustomer.address || ''} onChange={(e) => setNewMembershipCustomer({ ...newMembershipCustomer, address: e.target.value })} />
             </div>
           </div>
           <button type="submit" className="premium-button text-sm">Simpan + Aktifkan Membership</button>
@@ -218,11 +218,11 @@ export default function Customers() {
              </div>
              <div>
                <label className="block text-sm font-bold text-slate-600 mb-2">Nomor WhatsApp</label>
-               <input className="premium-input bg-secondary" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+               <input className="premium-input bg-secondary" value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} />
              </div>
              <div>
                <label className="block text-sm font-bold text-slate-600 mb-2">Alamat Domisili</label>
-               <input className="premium-input bg-secondary" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+               <input className="premium-input bg-secondary" value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} />
              </div>
           </div>
           <button type="submit" disabled={loading} className="premium-button text-sm md:text-base px-8">
