@@ -31,10 +31,8 @@ export default function Login() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
 
       <div className="w-full max-w-[420px] bg-white border border-slate-200 shadow-2xl p-8 md:p-10 rounded-3xl z-10 relative">
-        <div className="mb-10 text-center">
-          <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-[#254b85] items-center justify-center text-white mb-6 shadow-lg shadow-primary/30">
-            <LogIn size={32} />
-          </div>
+        <div className="mb-8 text-center flex flex-col items-center">
+          <img src="/logo.png" alt="WashPro Logo" className="w-20 h-auto object-contain mb-4" />
           <h2 className="text-3xl font-black text-primary mb-2 tracking-tight">Selamat Datang</h2>
           <p className="text-slate-500 font-medium text-sm">Masuk ke sistem WashPro Web POS</p>
         </div>

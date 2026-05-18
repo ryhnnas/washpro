@@ -59,11 +59,40 @@ function getRandomPaymentMethod() {
 async function main() {
   const ownerPassword = process.env.SEED_OWNER_PASSWORD || "owner12345";
   const staffPassword = process.env.SEED_STAFF_PASSWORD || "staff12345";
+  const superAdminPassword = process.env.SEED_SUPERADMIN_PASSWORD || "adminwashpro123";
 
   const ownerHashedPassword = await bcrypt.hash(ownerPassword, 10);
   const staffHashedPassword = await bcrypt.hash(staffPassword, 10);
+  const superAdminHashedPassword = await bcrypt.hash(superAdminPassword, 10);
 
-  // 1. Business
+  // 0. SuperAdmin
+  await prisma.superAdmin.upsert({
+    where: { email: "admin@washpro.com" },
+    update: { name: "Super Admin WashPro", password: superAdminHashedPassword },
+    create: { name: "Super Admin WashPro", email: "admin@washpro.com", password: superAdminHashedPassword },
+  });
+  console.log("✅ SuperAdmin seeded");
+
+  // 0b. Subscription Plans
+  const planBulanan = await prisma.subscriptionPlan.upsert({
+    where: { id: "plan-bulanan-washpro" },
+    update: { name: "Paket Bulanan", price: 50000, durationDays: 30, features: ["Akses Semua Fitur POS", "Staff Tanpa Batas", "Laporan & Analitik", "Notifikasi WhatsApp"], isActive: true },
+    create: { id: "plan-bulanan-washpro", name: "Paket Bulanan", price: 50000, durationDays: 30, features: ["Akses Semua Fitur POS", "Staff Tanpa Batas", "Laporan & Analitik", "Notifikasi WhatsApp"], isActive: true },
+  });
+  const planTahunan = await prisma.subscriptionPlan.upsert({
+    where: { id: "plan-tahunan-washpro" },
+    update: { name: "Paket Tahunan", price: 500000, durationDays: 365, features: ["Akses Semua Fitur POS", "Staff Tanpa Batas", "Laporan & Analitik", "Notifikasi WhatsApp", "Hemat 2 Bulan!"], isActive: true },
+    create: { id: "plan-tahunan-washpro", name: "Paket Tahunan", price: 500000, durationDays: 365, features: ["Akses Semua Fitur POS", "Staff Tanpa Batas", "Laporan & Analitik", "Notifikasi WhatsApp", "Hemat 2 Bulan!"], isActive: true },
+  });
+  console.log("✅ Subscription Plans seeded");
+
+  // 1. Business — set trial 7 hari dari sekarang untuk data demo
+  const trialEndAt = new Date();
+  trialEndAt.setDate(trialEndAt.getDate() + 7);
+
+  const subscriptionEndAt = new Date();
+  subscriptionEndAt.setDate(subscriptionEndAt.getDate() + 37); // 7 trial + 30 hari paket
+
   let business = await prisma.business.findFirst({
     where: { name: "WashPro Demo Laundry" },
   });
@@ -74,6 +103,19 @@ async function main() {
         name: "WashPro Demo Laundry",
         address: "Jl. Demo No. 123, Jakarta Selatan",
         phone: "021-12345678",
+        subscriptionStatus: "ACTIVE",
+        trialEndAt: trialEndAt,
+        subscriptionEndAt: subscriptionEndAt,
+      },
+    });
+  } else {
+    // Update demo business agar punya data subscription yang valid
+    business = await prisma.business.update({
+      where: { id: business.id },
+      data: {
+        subscriptionStatus: "ACTIVE",
+        trialEndAt: trialEndAt,
+        subscriptionEndAt: subscriptionEndAt,
       },
     });
   }
@@ -98,7 +140,11 @@ async function main() {
       requireCustomerName: true,
       requireCustomerPhone: true,
       requireCustomerAddress: false,
-      staffAllowedMenus: JSON.stringify(["CASHIER", "TRACKING", "REPORTS"]),
+      allowStaffDashboard: true,
+      allowStaffCustomers: true,
+      allowStaffServices: false,
+      allowStaffReports: false,
+      allowStaffSettings: false,
       membershipPackageName: "Paket Hemat Bulanan",
       membershipDurationDays: 30,
     },
@@ -107,7 +153,11 @@ async function main() {
       requireCustomerName: true,
       requireCustomerPhone: true,
       requireCustomerAddress: false,
-      staffAllowedMenus: JSON.stringify(["CASHIER", "TRACKING", "REPORTS"]),
+      allowStaffDashboard: true,
+      allowStaffCustomers: true,
+      allowStaffServices: false,
+      allowStaffReports: false,
+      allowStaffSettings: false,
       membershipPackageName: "Paket Hemat Bulanan",
       membershipDurationDays: 30,
     },
@@ -262,9 +312,13 @@ async function main() {
 
   console.log("\n✅ Seed selesai dengan sukses!");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log(`SuperAdmin : superadmin@washpro.local / ${superAdminPassword}`);
   console.log(`Owner  : owner@washpro.local / ${ownerPassword}`);
   console.log(`Staff  : staff@washpro.local / ${staffPassword}`);
   console.log(`Bisnis : ${business.name}`);
+  console.log(`Status : ${business.subscriptionStatus}`);
+  console.log(`Trial  : s/d ${business.trialEndAt?.toLocaleDateString('id-ID')}`);
+  console.log(`Aktif  : s/d ${business.subscriptionEndAt?.toLocaleDateString('id-ID')}`);
   console.log(`Pelanggan : ${createdCustomers.length} orang`);
   console.log(`Layanan   : ${services.length} jenis`);
   console.log(`Transaksi : ±65 transaksi (45 hari terakhir)`);

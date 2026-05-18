@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users, UserPlus, User } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Bell, Tags, Users, UserPlus, User, CreditCard } from 'lucide-react';
 import api from '../lib/axios';
-import logo from '../assets/logo.png';
+const logo = '/logo.png';
+import SubscriptionBanner from '../components/SubscriptionBanner';
 
 export default function MainLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -110,6 +111,10 @@ export default function MainLayout() {
           {user?.role === 'OWNER' && (
             <>
               <p className="px-2 sm:px-4 text-[10px] sm:text-xs font-bold text-slate-300/60 uppercase tracking-widest mt-6 sm:mt-8 mb-3 sm:mb-4">Administrasi</p>
+              <NavLink to="/subscription" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
+                <div className={`transition-transform duration-300 group-hover:scale-110`}><CreditCard size={18} className="sm:w-5 sm:h-5" /></div>
+                <span className="truncate">Informasi Langganan</span>
+              </NavLink>
               <NavLink to="/services" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
                 <div className={`transition-transform duration-300 group-hover:scale-110`}><Tags size={18} className="sm:w-5 sm:h-5" /></div>
                 <span className="truncate">Daftar Layanan</span>
@@ -148,6 +153,8 @@ export default function MainLayout() {
 
       {/* Main Content - Tema Terang (Cream #F5F2EA) */}
       <main className="flex-1 flex flex-col overflow-hidden relative bg-secondary">
+        {/* Banner Peringatan Langganan (H-7) */}
+        <SubscriptionBanner />
         <header className="h-16 sm:h-18 lg:h-20 flex items-center justify-between px-3 sm:px-6 lg:px-10 border-b border-primary/5 bg-white/70 backdrop-blur-md z-30 relative sticky top-0 shadow-sm">
           <div className="flex items-center gap-2 sm:gap-4">
             <button 

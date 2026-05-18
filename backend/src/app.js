@@ -14,6 +14,8 @@ const customerRoutes = require('./routes/customerRoutes');
 const staffRoutes = require('./routes/staffRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const superAdminRoutes = require('./routes/superAdminRoutes');
+const subscriptionRoutes = require('./routes/subscriptionRoutes');
 const errorMiddleware = require('./middleware/errorMiddleware');
 
 const app = express();
@@ -55,8 +57,12 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// 5. Body Parser with Size Limit
-app.use(express.json({ limit: '10kb' }));
+// 5. Body Parser with Size Limit (5mb untuk mendukung upload bukti bayar base64)
+app.use(express.json({ limit: '5mb' }));
+
+// Serve static files (foto bukti bayar)
+const path = require('path');
+app.use('/uploads', require('express').static(path.join(__dirname, '../uploads')));
 
 // Gunakan Routes
 app.use('/api/auth', authRoutes);
@@ -68,6 +74,8 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/superadmin', superAdminRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 // Test Route
 app.get('/', (req, res) => res.send("WashPro API Active"));

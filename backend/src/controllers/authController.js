@@ -8,7 +8,17 @@ const registerOwner = async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await prisma.$transaction(async (tx) => {
-      const business = await tx.business.create({ data: { name: businessName } });
+      // Set trial 7 hari sejak registrasi
+      const trialEndAt = new Date();
+      trialEndAt.setDate(trialEndAt.getDate() + 7);
+
+      const business = await tx.business.create({
+        data: {
+          name: businessName,
+          subscriptionStatus: 'TRIAL',
+          trialEndAt,
+        },
+      });
       const user = await tx.user.create({
         data: {
           name: ownerName,

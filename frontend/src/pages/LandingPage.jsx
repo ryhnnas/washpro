@@ -13,9 +13,7 @@ export default function LandingPage() {
           <div className="flex justify-between items-center h-20">
             {/* Logo */}
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-primary-light flex items-center justify-center text-white shadow-md shadow-primary/20">
-                <ShieldCheck size={24} />
-              </div>
+              <img src="/logo.png" alt="WashPro Logo" className="w-10 h-10 object-contain" />
               <span className="text-2xl font-black tracking-tight text-primary">Wash<span className="text-tertiary">Pro</span></span>
             </div>
 
