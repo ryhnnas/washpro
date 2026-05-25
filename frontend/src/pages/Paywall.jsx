@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, Upload, X, Loader2, Clock, Star, Shield, Zap, AlertCircle, ArrowLeft } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import api from '../lib/axios';
+import { generateDynamicQRIS } from '../utils/qrisHelper';
 
 const formatIDR = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
 
@@ -20,12 +22,13 @@ export default function Paywall() {
   const fileInputRef = useRef();
   const navigate = useNavigate();
 
-  // QRIS Dana Bisnis — ganti dengan path gambar QRIS kamu
-  const QRIS_IMAGE_URL = '/qris-dana.png';
+  // Raw Static QRIS Payload (DANA Bisnis)
+  const STATIC_QRIS_PAYLOAD = '00020101021126570011ID.DANA.WWW011893600915300040105002090004010500303UMI51440014ID.CO.QRIS.WWW0215ID10264697174030303UMI5204581253033605802ID5925Seblak Mledak Sindangsari6015Kabupaten Kunin6105455736304D373';
+  
   const OWNER_BANK_INFO = {
-    nama: 'WashPro SaaS',
-    bank: 'DANA Bisnis',
-    nomor: 'Scan QRIS di atas',
+    nama: 'WashPro',
+    bank: 'QRIS DANA Bisnis',
+    nomor: 'Nominal Otomatis',
   };
 
   useEffect(() => {
@@ -208,22 +211,21 @@ export default function Paywall() {
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
                 <h2 className="text-white font-bold text-lg mb-4">2. Scan QRIS & Transfer</h2>
                 <div className="bg-white rounded-xl p-4 flex flex-col items-center gap-3">
-                  <img
-                    src={QRIS_IMAGE_URL}
-                    alt="QRIS Dana Bisnis WashPro"
-                    className="w-48 h-48 object-contain"
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
-                  <div
-                    style={{ display: 'none' }}
-                    className="w-48 h-48 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-500 text-center text-xs p-4"
-                  >
-                    <p className="font-bold text-sm mb-1">QRIS DANA Bisnis</p>
-                    <p>Letakkan gambar QRIS kamu di:</p>
-                    <code className="text-blue-600 mt-1">frontend/public/qris-dana.png</code>
+                  <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100 flex items-center justify-center">
+                    <QRCodeSVG
+                      value={generateDynamicQRIS(STATIC_QRIS_PAYLOAD, selectedPlan.price)}
+                      size={200}
+                      level="H"
+                      includeMargin={true}
+                      imageSettings={{
+                        src: '/logo.png',
+                        x: undefined,
+                        y: undefined,
+                        height: 36,
+                        width: 36,
+                        excavate: true,
+                      }}
+                    />
                   </div>
                   <div className="text-center">
                     <p className="text-slate-700 font-bold text-sm">{OWNER_BANK_INFO.nama}</p>

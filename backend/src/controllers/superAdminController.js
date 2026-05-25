@@ -192,13 +192,13 @@ const approvePayment = async (req, res) => {
     const ownerUser = await prisma.user.findFirst({
       where: { businessId: payment.businessId, role: 'OWNER' },
     });
-    const targetPhone = payment.business.phone || (ownerUser ? ownerUser.email : null);
+    const targetPhone = payment.business.phone;
     if (targetPhone) {
       const endDateStr = newSubscriptionEndAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
       const ownerName = ownerUser ? ownerUser.name : payment.business.name;
       const message = `✅ *WashPro - Pembayaran Dikonfirmasi*\n${'━'.repeat(28)}\nHalo *${ownerName}*,\n\nPembayaran langganan *${payment.plan.name}* Anda sebesar *Rp ${payment.amount.toLocaleString('id-ID')}* telah kami terima dan dikonfirmasi.\n\n📅 Masa aktif toko Anda kini berlaku hingga:\n*${endDateStr}*\n\nSelamat berjualan! 🚀\n_Tim WashPro_`;
       whatsappService.sendMessage({
-        businessId: payment.businessId,
+        businessId: 'SUPERADMIN',
         phone: targetPhone,
         message,
       }).catch(() => {/* Notifikasi WA gagal tidak block response */});
@@ -244,6 +244,22 @@ const rejectPayment = async (req, res) => {
       });
     }
 
+    // Kirim notifikasi WA ke pemilik laundry saat ditolak (best-effort)
+    const ownerUser = await prisma.user.findFirst({
+      where: { businessId: payment.businessId, role: 'OWNER' },
+    });
+    const targetPhone = payment.business.phone;
+    if (targetPhone) {
+      const ownerName = ownerUser ? ownerUser.name : payment.business.name;
+      const rejectReason = reason || 'Bukti pembayaran tidak valid.';
+      const message = `❌ *WashPro - Pembayaran Ditolak*\n${'━'.repeat(28)}\nHalo *${ownerName}*,\n\nMohon maaf, konfirmasi pembayaran paket *${payment.plan.name}* Anda sebesar *Rp ${payment.amount.toLocaleString('id-ID')}* ditolak oleh Admin.\n\n⚠️ Alasan:\n*${rejectReason}*\n\nSilakan periksa kembali bukti transfer Anda dan unggah ulang bukti yang valid pada halaman Paywall.\n\n_Tim WashPro_`;
+      whatsappService.sendMessage({
+        businessId: 'SUPERADMIN',
+        phone: targetPhone,
+        message,
+      }).catch(() => {});
+    }
+
     res.json({ message: 'Pembayaran berhasil ditolak.', payment: updatedPayment });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -272,6 +288,64 @@ const upsertPlan = async (req, res) => {
   }
 };
 
+const getWhatsAppStatus = async (req, res) => {
+  try {
+    const status = await whatsappService.checkConnectionStatus('SUPERADMIN');
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const connectWhatsAppQR = async (req, res) => {
+  try {
+    const result = await whatsappService.loginWithQR('SUPERADMIN');
+    if (!result.ok) return res.status(500).json({ error: result.error });
+    res.json({ message: 'Silakan scan QR Code ini', qr_code: result.qr });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const connectWhatsAppPairing = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) return res.status(400).json({ message: 'Nomor HP wajib diisi' });
+
+    const result = await whatsappService.loginWithCode('SUPERADMIN', phoneNumber);
+    if (!result.ok) return res.status(500).json({ error: result.error });
+    res.json({ message: 'Masukkan kode ini di WhatsApp Anda', pairing_code: result.code });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const disconnectWhatsApp = async (req, res) => {
+  try {
+    const result = await whatsappService.logoutDevice('SUPERADMIN');
+    if (!result.ok) return res.status(500).json({ error: result.error });
+    res.json({ message: 'WhatsApp SuperAdmin berhasil diputuskan' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const sendWhatsAppTestMessage = async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ message: 'Nomor HP wajib diisi' });
+
+  try {
+    const result = await whatsappService.sendMessage({
+      businessId: 'SUPERADMIN',
+      phone,
+      message: `Pesan uji coba integrasi WhatsApp SuperAdmin WashPro berhasil.\n\n_Pesan otomatis dari WashPro._`
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   login,
   getDashboardStats,
@@ -283,4 +357,9 @@ module.exports = {
   rejectPayment,
   getPlans,
   upsertPlan,
+  getWhatsAppStatus,
+  connectWhatsAppQR,
+  connectWhatsAppPairing,
+  disconnectWhatsApp,
+  sendWhatsAppTestMessage,
 };

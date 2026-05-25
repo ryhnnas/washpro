@@ -127,19 +127,25 @@ const submitPayment = async (req, res) => {
       }),
     ]);
 
-    // Kirim notifikasi WA ke SuperAdmin (SUPERADMIN_PHONE di .env)
+    // Kirim notifikasi WA via GOWA (SuperAdmin device)
+    const { sendMessage } = require('../services/whatsappService');
     const superAdminPhone = process.env.SUPERADMIN_PHONE;
     const ownerUser = await prisma.user.findFirst({ where: { businessId, role: 'OWNER' } });
     const businessInfo = await prisma.business.findUnique({ where: { id: businessId } });
+    const ownerName = ownerUser?.name || businessInfo?.name || '-';
 
+    // 1. Kirim notifikasi ke Tenant (konfirmasi bukti transfer diterima)
+    if (phone) {
+      const tenantMsg = `⏳ *WashPro - Pembayaran Diterima*\n${'━'.repeat(28)}\nHalo *${ownerName}*,\n\nTerima kasih! Bukti pembayaran untuk paket *${plan.name}* sebesar *Rp ${plan.price.toLocaleString('id-ID')}* telah kami terima.\n\nPembayaran Anda sedang dalam proses verifikasi oleh Tim Admin (maks. 1x24 jam). Anda akan menerima notifikasi WA setelah dikonfirmasi.\n\n_Tim WashPro_`;
+      sendMessage({ businessId: 'SUPERADMIN', phone, message: tenantMsg })
+        .catch(() => {});
+    }
+
+    // 2. Kirim notifikasi ke SuperAdmin (peringatan ada pembayaran masuk)
     if (superAdminPhone) {
-      const { sendMessage } = require('../services/whatsappService');
-      const adminMsg = `🚨 *[WashPro Admin] Pembayaran Baru Menunggu Konfirmasi*\n${'━'.repeat(28)}\n🏪 Toko    : *${businessInfo?.name}*\n👤 Pemilik : ${ownerUser?.name || '-'}\n📦 Paket   : ${plan.name}\n💰 Nominal : Rp ${plan.price.toLocaleString('id-ID')}\n\nSegera buka Dashboard Superadmin untuk memverifikasi bukti pembayaran.\n_Notifikasi otomatis dari Sistem WashPro_`;
-      
-      // Kirim via WA bisnis (bot) ke nomor pribadi superadmin
-      // Kita gunakan businessId dari bisnis demo sebagai pengirim (yang punya sesi WA terhubung)
-      sendMessage({ businessId, phone: superAdminPhone, message: adminMsg })
-        .catch(() => {/* WA notification gagal tidak block response */});
+      const adminMsg = `🚨 *[WashPro Admin] Pembayaran Baru Menunggu Konfirmasi*\n${'━'.repeat(28)}\n🏪 Toko    : *${businessInfo?.name}*\n👤 Pemilik : ${ownerName}\n📦 Paket   : ${plan.name}\n💰 Nominal : Rp ${plan.price.toLocaleString('id-ID')}\n\nSegera buka Dashboard Superadmin untuk memverifikasi bukti pembayaran.\n_Notifikasi otomatis dari Sistem WashPro_`;
+      sendMessage({ businessId: 'SUPERADMIN', phone: superAdminPhone, message: adminMsg })
+        .catch(() => {});
     }
 
     res.status(201).json({

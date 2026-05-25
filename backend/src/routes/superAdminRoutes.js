@@ -12,6 +12,11 @@ const {
   rejectPayment,
   getPlans,
   upsertPlan,
+  getWhatsAppStatus,
+  connectWhatsAppQR,
+  connectWhatsAppPairing,
+  disconnectWhatsApp,
+  sendWhatsAppTestMessage,
 } = require('../controllers/superAdminController');
 
 // === PUBLIC ===
@@ -40,5 +45,17 @@ router.post('/payments/:paymentId/reject', requireSuperAdmin, rejectPayment);
 router.get('/plans', requireSuperAdmin, getPlans);
 // POST /api/superadmin/plans — buat/update paket
 router.post('/plans', requireSuperAdmin, upsertPlan);
+
+// === WHATSAPP CONNECTION ===
+// GET /api/superadmin/whatsapp/status
+router.get('/whatsapp/status', requireSuperAdmin, getWhatsAppStatus);
+// POST /api/superadmin/whatsapp/connect/qr
+router.post('/whatsapp/connect/qr', requireSuperAdmin, connectWhatsAppQR);
+// POST /api/superadmin/whatsapp/connect/pairing
+router.post('/whatsapp/connect/pairing', requireSuperAdmin, connectWhatsAppPairing);
+// POST /api/superadmin/whatsapp/disconnect
+router.post('/whatsapp/disconnect', requireSuperAdmin, disconnectWhatsApp);
+// POST /api/superadmin/whatsapp/test-message
+router.post('/whatsapp/test-message', requireSuperAdmin, sendWhatsAppTestMessage);
 
 module.exports = router;
