@@ -88,6 +88,7 @@ model Business {
   subscriptionStatus SubscriptionStatus @default(TRIAL) @map("subscription_status")
   trialEndAt         DateTime?          @map("trial_end_at")
   subscriptionEndAt  DateTime?          @map("subscription_end_at")
+  deletedAt          DateTime?          @map("deleted_at")
 
   users                       User[]
   transactions                Transaction[]

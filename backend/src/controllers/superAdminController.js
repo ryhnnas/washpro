@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const whatsappService = require('../services/whatsappService');
+const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 
 // ==================== LOGIN ====================
 const login = async (req, res) => {
@@ -37,11 +38,10 @@ const login = async (req, res) => {
 // ==================== DASHBOARD STATS ====================
 const getDashboardStats = async (req, res) => {
   try {
-    const [totalBusinesses, activeBusinesses, trialBusinesses, pendingPayments, pendingCount] = await Promise.all([
+    const [totalBusinesses, activeBusinesses, trialBusinesses, pendingPayments] = await Promise.all([
       prisma.business.count(),
       prisma.business.count({ where: { subscriptionStatus: 'ACTIVE' } }),
       prisma.business.count({ where: { subscriptionStatus: 'TRIAL' } }),
-      prisma.subscriptionPayment.count({ where: { status: 'PENDING' } }),
       prisma.subscriptionPayment.count({ where: { status: 'PENDING' } }),
     ]);
 
@@ -73,7 +73,7 @@ const getBusinesses = async (req, res) => {
     const { status, search, page = 1, limit = 20 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
-    const where = {};
+    const where = { deletedAt: null };
     if (status) where.subscriptionStatus = status;
     if (search) where.name = { contains: search };
 
@@ -111,6 +111,8 @@ const toggleBusiness = async (req, res) => {
       data: { subscriptionStatus: newStatus },
     });
 
+    invalidateSubscriptionCache(businessId);
+
     res.json({ message: `Toko berhasil ${action === 'SUSPEND' ? 'ditangguhkan' : 'diaktifkan'}`, business: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -119,14 +121,35 @@ const toggleBusiness = async (req, res) => {
 
 const deleteBusiness = async (req, res) => {
   const { businessId } = req.params;
+  const { confirmName } = req.body;
+
   try {
-    const business = await prisma.business.findUnique({ where: { id: businessId } });
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: { id: true, name: true, subscriptionStatus: true },
+    });
     if (!business) return res.status(404).json({ message: 'Bisnis tidak ditemukan' });
 
-    // Cascade delete akan otomatis menghapus semua data terkait
-    await prisma.business.delete({ where: { id: businessId } });
+    // Konfirmasi ganda: nama bisnis harus cocok persis
+    if (!confirmName || confirmName.trim() !== business.name.trim()) {
+      return res.status(400).json({
+        message: 'Konfirmasi nama bisnis tidak cocok. Ketik nama bisnis dengan tepat untuk melanjutkan penghapusan.',
+        hint: 'Ketik nama bisnis persis seperti yang terdaftar.',
+      });
+    }
 
-    res.json({ message: `Toko "${business.name}" dan seluruh datanya berhasil dihapus.` });
+    // Soft delete — set deletedAt dan ubah status ke SUSPENDED
+    await prisma.business.update({
+      where: { id: businessId },
+      data: {
+        deletedAt: new Date(),
+        subscriptionStatus: 'SUSPENDED',
+      },
+    });
+
+    res.json({
+      message: `Toko "${business.name}" telah dinonaktifkan. Data masih tersimpan dan dapat dipulihkan oleh tim teknis jika diperlukan.`,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -193,6 +216,8 @@ const approvePayment = async (req, res) => {
       }),
     ]);
 
+    invalidateSubscriptionCache(payment.businessId);
+
     // Kirim notifikasi WA ke pemilik laundry (best-effort, tidak block response)
     const ownerUser = await prisma.user.findFirst({
       where: { businessId: payment.businessId, role: 'OWNER' },
@@ -240,6 +265,8 @@ const rejectPayment = async (req, res) => {
         rejectionReason: reason || 'Bukti pembayaran tidak valid.',
       },
     });
+
+    invalidateSubscriptionCache(payment.businessId);
 
     // Kembalikan status ke EXPIRED jika saat ini PENDING_PAYMENT
     if (payment.business.subscriptionStatus === 'PENDING_PAYMENT') {
@@ -315,7 +342,6 @@ const connectWhatsAppQR = async (req, res) => {
 const connectWhatsAppPairing = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
-    if (!phoneNumber) return res.status(400).json({ message: 'Nomor HP wajib diisi' });
 
     const result = await whatsappService.loginWithCode('SUPERADMIN', phoneNumber);
     if (!result.ok) return res.status(500).json({ error: result.error });
@@ -337,7 +363,6 @@ const disconnectWhatsApp = async (req, res) => {
 
 const sendWhatsAppTestMessage = async (req, res) => {
   const { phone } = req.body;
-  if (!phone) return res.status(400).json({ message: 'Nomor HP wajib diisi' });
 
   try {
     const result = await whatsappService.sendMessage({

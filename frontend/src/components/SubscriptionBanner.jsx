@@ -1,49 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, AlertTriangle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import api from '../lib/axios';
+import { useApp } from '../context/AppContext';
 
 /**
  * SubscriptionBanner — Banner peringatan perpanjangan langganan.
  * - Muncul jika sisa waktu <= 7 hari (TRIAL atau ACTIVE)
  * - Dapat ditutup dengan tombol X (tersimpan di sessionStorage, reset tiap buka tab baru)
- * - Menampilkan pesan dinamis berdasarkan sisa hari
+ * - Data subscription diambil dari AppContext (tidak fetch ulang)
  */
 export default function SubscriptionBanner() {
-  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() =>
+    !!sessionStorage.getItem('subscription_banner_dismissed')
+  );
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Cek apakah sudah di-dismiss di sesi ini
-    const isDismissed = sessionStorage.getItem('subscription_banner_dismissed');
-    if (isDismissed) {
-      setDismissed(true);
-      return;
-    }
-
-    const fetchStatus = async () => {
-      try {
-        const res = await api.get('/subscriptions/status');
-        if (res.data.showWarningBanner) {
-          setSubscriptionInfo(res.data);
-        }
-      } catch {
-        // Jika gagal fetch (misal belum login), tidak tampilkan banner
-      }
-    };
-
-    fetchStatus();
-  }, []);
+  const { subscription } = useApp();
 
   const handleDismiss = () => {
     sessionStorage.setItem('subscription_banner_dismissed', 'true');
     setDismissed(true);
   };
 
-  if (dismissed || !subscriptionInfo) return null;
+  if (dismissed || !subscription?.showWarningBanner) return null;
 
-  const { daysRemaining, subscriptionStatus } = subscriptionInfo;
+  const { daysRemaining, subscriptionStatus } = subscription;
   const isTrial = subscriptionStatus === 'TRIAL';
 
   const getBannerStyle = () => {

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Edit, Trash2, Search, Save, X, ChevronLeft, ChevronRight, Filter, Gift, Clock } from 'lucide-react';
 import api from '../lib/axios';
+import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -16,12 +18,14 @@ export default function Customers() {
   const [formData, setFormData] = useState({ name: '', phone: '', address: '' });
   const [showAddMembershipForm, setShowAddMembershipForm] = useState(false);
   const [newMembershipCustomer, setNewMembershipCustomer] = useState({ name: '', phone: '', address: '', templateId: '' });
-  const [membershipPackages, setMembershipPackages] = useState([]);
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [targetCustomerId, setTargetCustomerId] = useState(null);
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const isOwner = user.role === 'OWNER';
+  const { user } = useAuth();
+  const { settings } = useApp();
+  const isOwner = user?.role === 'OWNER';
+  // Ambil membershipPackages dari context, tidak fetch ulang
+  const membershipPackages = settings?.membershipPackages || [];
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -52,9 +56,7 @@ export default function Customers() {
 
   useEffect(() => {
     fetchCustomers();
-    api.get('/settings').then(res => {
-      setMembershipPackages(res.data.membershipPackages || []);
-    });
+    // membershipPackages sudah dari AppContext, tidak perlu fetch lagi
   }, [page, debouncedSearch, membershipFilter]);
 
   const handleEdit = (c) => {

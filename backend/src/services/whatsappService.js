@@ -378,7 +378,7 @@ const sendStatusUpdate = async ({ businessId, transaction }) => {
 
 // 3. Health Checker Loop (Bisa dipanggil di server start)
 const startHealthCheck = () => {
-  setInterval(async () => {
+  const intervalId = setInterval(async () => {
     try {
       const activeSessions = await prisma.whatsAppSession.findMany({
         where: { status: { in: ['connected', 'connecting'] } }
@@ -389,7 +389,10 @@ const startHealthCheck = () => {
     } catch (err) {
       console.error('WhatsApp Health Check Error:', err.message);
     }
-  }, 60000); // Check every minute
+  }, 60000);
+
+  // Return intervalId agar bisa di-clear saat graceful shutdown
+  return intervalId;
 };
 
 module.exports = {

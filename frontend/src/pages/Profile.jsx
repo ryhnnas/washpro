@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { User, Lock, Save, AlertCircle } from 'lucide-react';
 import api from '../lib/axios';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 export default function Profile() {
-  const userStr = localStorage.getItem('user');
-  const initialUser = userStr ? JSON.parse(userStr) : {};
+  const { user, updateUser } = useAuth();
   
   const [formData, setFormData] = useState({
-    name: initialUser.name || '',
+    name: user?.name || '',
     password: '',
     confirmPassword: '',
   });
@@ -27,15 +27,11 @@ export default function Profile() {
 
       const res = await api.put('/auth/profile', payload);
       
-      // Update localStorage
-      const updatedUser = { ...initialUser, name: res.data.user.name };
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+      // Update context + localStorage sekaligus (tidak perlu reload)
+      updateUser({ name: res.data.user.name });
       
       toast.success("Profil berhasil diperbarui");
-      setFormData({ ...formData, password: '', confirmPassword: '' });
-      
-      // Refresh page to update sidebar/header
-      setTimeout(() => window.location.reload(), 1000);
+      setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
     } catch (err) {
       toast.error(err.response?.data?.error || "Gagal memperbarui profil");
     }

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Save, User, Package, Calendar, Search, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import api from '../lib/axios';
+import { useApp } from '../context/AppContext';
 
 export default function Cashier() {
   const [services, setServices] = useState([]);
-  const [settings, setSettings] = useState(null);
   const [customers, setCustomers] = useState([]);
+  const { settings } = useApp(); // Ambil dari context, tidak fetch ulang
   
   const [formData, setFormData] = useState({
     customerName: '',
@@ -30,11 +31,9 @@ export default function Cashier() {
   useEffect(() => {
     Promise.all([
       api.get('/services').catch(() => ({ data: [] })),
-      api.get('/settings').catch(() => ({ data: null })),
       api.get('/customers?limit=100').catch(() => ({ data: { data: [] } }))
-    ]).then(([resSvc, resSet, resCust]) => {
+    ]).then(([resSvc, resCust]) => {
       setServices(resSvc.data);
-      if(resSet.data) setSettings(resSet.data);
       setCustomers(resCust.data.data || []);
     });
     

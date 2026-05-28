@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone } from 'lucide-react';
+import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/axios';
 
 const STATUS_CONFIG = {
@@ -36,18 +36,23 @@ const NEXT_STATUS = {
   DIAMBIL: null
 };
 
+const LIMIT = 30;
+
 export default function Tracking() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [toast, setToast] = useState(null); // { type, message }
   const [overdueCount, setOverdueCount] = useState(0);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (currentPage = page) => {
     setLoading(true);
     try {
-      const res = await api.get('/transactions?limit=100');
+      const res = await api.get(`/transactions?limit=${LIMIT}&page=${currentPage}`);
       setTransactions(res.data.data || []);
+      setTotalPages(res.data.pagination?.totalPages || 1);
       const overdueRes = await api.get('/transactions/overdue');
       setOverdueCount(overdueRes.data?.total || 0);
     } catch (err) {
@@ -57,8 +62,8 @@ export default function Tracking() {
   };
 
   useEffect(() => {
-    fetchTransactions();
-  }, []);
+    fetchTransactions(page);
+  }, [page]);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -84,7 +89,7 @@ export default function Tracking() {
       }
     } catch (err) {
       showToast('error', 'Gagal update status');
-      fetchTransactions();
+      fetchTransactions(page);
     }
   };
 
@@ -120,7 +125,7 @@ export default function Tracking() {
            )}
         </div>
         <button 
-          onClick={fetchTransactions}
+          onClick={() => fetchTransactions(page)}
           className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm text-primary rounded-xl hover:bg-slate-50 transition-all active:scale-95"
         >
           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -228,6 +233,29 @@ export default function Tracking() {
           );
         })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            disabled={page <= 1 || loading}
+            onClick={() => setPage(p => p - 1)}
+            className="p-2 rounded-xl border border-slate-200 bg-white text-primary hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <span className="text-sm font-bold text-slate-500 min-w-[100px] text-center">
+            Halaman {page} dari {totalPages}
+          </span>
+          <button
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage(p => p + 1)}
+            className="p-2 rounded-xl border border-slate-200 bg-white text-primary hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

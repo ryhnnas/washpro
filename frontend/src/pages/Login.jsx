@@ -1,24 +1,33 @@
 import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ArrowRight } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     try {
       const data = await authService.login(email, password);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/dashboard');
+      // Gunakan AuthContext login — sync ke localStorage + state sekaligus
+      login(data.token, data.user);
+      // Redirect berdasarkan role: STAFF ke kasir, OWNER ke dashboard
+      if (data.user.role === 'STAFF') {
+        navigate('/cashier');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
-      alert(err.response?.data?.message || "Login gagal");
+      setError(err.response?.data?.message || 'Login gagal. Periksa email dan password Anda.');
     } finally {
       setLoading(false);
     }
@@ -37,8 +46,12 @@ export default function Login() {
           <p className="text-slate-500 font-medium text-sm">Masuk ke sistem WashPro Web POS</p>
         </div>
 
+        {error && (
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm font-medium">
+            {error}
+          </div>
+        )}
 
-        
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
@@ -70,7 +83,7 @@ export default function Login() {
           >
             {loading ? "Memproses..." : (
               <>
-                Mendekripsi <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                Masuk <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </>
             )}
           </button>

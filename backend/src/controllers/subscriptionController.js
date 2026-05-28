@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const path = require('path');
 const fs = require('fs');
 const { sendMessage } = require('../services/whatsappService');
+const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 
 // Konstanta: trial 7 hari
 const TRIAL_DAYS = 7;
@@ -118,6 +119,8 @@ const submitPayment = async (req, res) => {
         data: updateData,
       }),
     ]);
+
+    invalidateSubscriptionCache(businessId);
 
     // Kirim notifikasi WA via GOWA (SuperAdmin device) — best-effort, tidak block response
     const superAdminPhone = process.env.SUPERADMIN_PHONE;

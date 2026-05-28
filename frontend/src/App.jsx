@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { AppProvider } from './context/AppContext';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -35,37 +37,41 @@ const SuperAdminRoute = ({ children }) => {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Public */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+    <AuthProvider>
+      <AppProvider>
+        <Router>
+          <Routes>
+            {/* Public */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-        {/* SuperAdmin Portal */}
-        <Route path="/superadmin/login" element={<SuperAdminLogin />} />
-        <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
-        <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" />} />
+            {/* SuperAdmin Portal */}
+            <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+            <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+            <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" />} />
 
-        {/* Paywall (butuh login tenant, tapi di luar MainLayout agar tidak ada sidebar) */}
-        <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+            {/* Paywall (butuh login tenant, tapi di luar MainLayout agar tidak ada sidebar) */}
+            <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
 
-        {/* Dashboard POS di dalam MainLayout */}
-        <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/cashier" element={<Cashier />} />
-          <Route path="customers" element={<Customers />} />
-          <Route path="/tracking" element={<Tracking />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="services" element={<Services />} />
-          <Route path="/staff" element={<Staff />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/subscription" element={<SubscriptionInfo />} />
-        </Route>
-      </Routes>
-    </Router>
+            {/* Dashboard POS di dalam MainLayout */}
+            <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/cashier" element={<Cashier />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="/tracking" element={<Tracking />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="services" element={<Services />} />
+              <Route path="/staff" element={<Staff />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/subscription" element={<SubscriptionInfo />} />
+            </Route>
+          </Routes>
+        </Router>
+      </AppProvider>
+    </AuthProvider>
   );
 }
 
-export default App;
+export default App;
