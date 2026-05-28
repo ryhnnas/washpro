@@ -1,20 +1,33 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit, Save, X } from 'lucide-react';
 import api from '../lib/axios';
+import toast, { Toaster } from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
+import TableSkeleton from '../components/TableSkeleton';
 
 export default function Services() {
   const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({ name: '', price: '', type: 'KILOAN', unit: 'kg', estimateValue: 24, estimateUnit: 'HOUR' });
   const [isAdding, setIsAdding] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+  const openConfirm = (title, message, onConfirm) =>
+    setConfirmDialog({ isOpen: true, title, message, onConfirm });
+  const closeConfirm = () =>
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
   const fetchServices = async () => {
+    setLoading(true);
     try {
       const res = await api.get('/services');
       setServices(res.data);
     } catch (err) {
-      console.error(err);
+      toast.error('Gagal memuat daftar layanan.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -24,7 +37,7 @@ export default function Services() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
     try {
       const payload = {
         ...formData,
@@ -34,8 +47,10 @@ export default function Services() {
 
       if (editingId) {
         await api.put(`/services/${editingId}`, payload);
+        toast.success('Layanan berhasil diperbarui.');
       } else {
         await api.post('/services', payload);
+        toast.success('Layanan baru berhasil ditambahkan.');
       }
       
       setFormData({ name: '', price: '', type: 'KILOAN', unit: 'kg', estimateValue: 24, estimateUnit: 'HOUR' });
@@ -43,9 +58,9 @@ export default function Services() {
       setIsAdding(false);
       fetchServices();
     } catch (err) {
-      alert("Gagal menyimpan layanan");
+      toast.error(err.response?.data?.message || 'Gagal menyimpan layanan.');
     }
-    setLoading(false);
+    setSaving(false);
   };
 
   const handleEdit = (svc) => {
@@ -62,13 +77,19 @@ export default function Services() {
   };
 
   const handleDelete = async (id) => {
-    if(!window.confirm("Yakin ingin menghapus layanan ini?")) return;
-    try {
-      await api.delete(`/services/${id}`);
-      fetchServices();
-    } catch (err) {
-      alert(err.response?.data?.error || "Gagal menghapus layanan");
-    }
+    openConfirm(
+      'Hapus Layanan',
+      'Layanan ini akan dihapus permanen. Layanan yang sudah pernah digunakan dalam transaksi tidak dapat dihapus.',
+      async () => {
+        try {
+          await api.delete(`/services/${id}`);
+          toast.success('Layanan berhasil dihapus.');
+          fetchServices();
+        } catch (err) {
+          toast.error(err.response?.data?.error || 'Gagal menghapus layanan. Layanan ini mungkin sudah digunakan dalam transaksi.');
+        }
+      }
+    );
   };
 
   return (
@@ -140,8 +161,8 @@ export default function Services() {
                </select>
              </div>
           </div>
-          <button type="submit" disabled={loading} className="premium-button text-xs sm:text-sm md:text-base w-full sm:w-auto px-6 sm:px-8">
-             <Save size={16} className="sm:w-4.5 sm:h-4.5" /> {loading ? "Menyimpan..." : "Simpan Layanan"}
+          <button type="submit" disabled={saving} className="premium-button text-xs sm:text-sm md:text-base w-full sm:w-auto px-6 sm:px-8">
+             <Save size={16} className="sm:w-4.5 sm:h-4.5" /> {saving ? "Menyimpan..." : "Simpan Layanan"}
           </button>
         </form>
       )}
@@ -159,7 +180,13 @@ export default function Services() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {services.map((svc) => (
+              {loading ? (
+                <TableSkeleton rows={5} cols={5} />
+              ) : services.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-3 sm:px-6 py-6 sm:py-8 text-center text-slate-500 text-xs sm:text-sm">Belum ada layanan yang ditambahkan.</td>
+                </tr>
+              ) : services.map((svc) => (
                 <tr key={svc.id} className="hover:bg-primary/[0.02] transition-colors">
                   <td className="px-3 sm:px-6 py-3 sm:py-4 font-bold text-primary truncate">{svc.name}</td>
                   <td className="px-3 sm:px-6 py-3 sm:py-4">
@@ -179,15 +206,20 @@ export default function Services() {
                   </td>
                 </tr>
               ))}
-              {services.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="px-3 sm:px-6 py-6 sm:py-8 text-center text-slate-500 text-xs sm:text-sm">Belum ada layanan yang ditambahkan.</td>
-                </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={() => { confirmDialog.onConfirm?.(); closeConfirm(); }}
+        onCancel={closeConfirm}
+      />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

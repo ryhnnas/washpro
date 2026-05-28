@@ -8,6 +8,7 @@ import MainLayout from './layouts/MainLayout';
 import Paywall from './pages/Paywall';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
+import NotFound from './pages/NotFound';
 
 // Halaman-halaman Tenant
 import Dashboard from './pages/Dashboard';
@@ -58,15 +59,18 @@ function App() {
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/cashier" element={<Cashier />} />
-              <Route path="customers" element={<Customers />} />
+              <Route path="/customers" element={<Customers />} />
               <Route path="/tracking" element={<Tracking />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="services" element={<Services />} />
+              <Route path="/services" element={<Services />} />
               <Route path="/staff" element={<Staff />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/subscription" element={<SubscriptionInfo />} />
             </Route>
+
+            {/* 404 — catch-all */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Router>
       </AppProvider>

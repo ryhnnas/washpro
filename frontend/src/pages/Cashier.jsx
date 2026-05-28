@@ -79,23 +79,22 @@ export default function Cashier() {
     if (selectedItems.length > 0) {
       setTotalPrice(selectedItems.reduce((sum, item) => sum + item.qty * item.service.price, 0));
 
-      const firstName = selectedItems[0].service.name.toLowerCase();
-      let d = new Date();
-      if (firstName.includes('hari')) {
-        const days = parseInt(firstName.match(/(\d+)\s*hari/)?.[1] || 0);
-        d.setDate(d.getDate() + days);
-      } else if (firstName.includes('jam')) {
-        const hours = parseInt(firstName.match(/(\d+)\s*jam/)?.[1] || 0);
-        d.setHours(d.getHours() + hours);
-      } else {
-        d.setDate(d.getDate() + 1); // default 1 hari
-      }
+      // Ambil estimasi terlama dari semua item — konsisten dengan logika backend
+      const maxHours = selectedItems.reduce((max, { service }) => {
+        const hours = service.estimateUnit === 'DAY'
+          ? (service.estimateValue || 1) * 24
+          : (service.estimateValue || 24);
+        return Math.max(max, hours);
+      }, 24);
+
+      const d = new Date();
+      d.setHours(d.getHours() + maxHours);
       setEndDate(d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + ' WIB');
     } else {
       setTotalPrice(0);
       setEndDate('');
     }
-  }, [JSON.stringify(formData.items), JSON.stringify(services)]);
+  }, [formData.items, services]);
 
   useEffect(() => {
     if (!selectedItems.length || !matchedCustomer?.membership?.isActive) {
@@ -145,11 +144,14 @@ export default function Cashier() {
       payableAmount,
       items: itemPreview,
     });
-  }, [JSON.stringify(selectedItems), matchedCustomer, settings]);
+  }, [formData.items, matchedCustomer?.id, settings]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedItems.length || totalPrice <= 0) return alert("Tambah minimal 1 layanan dengan jumlah valid.");
+    if (!selectedItems.length || totalPrice <= 0) {
+      setFeedback({ type: 'error', message: 'Tambah minimal 1 layanan dengan jumlah valid.' });
+      return;
+    }
     setLoading(true);
     setFeedback(null);
     setShowManualWA(false);
@@ -216,7 +218,10 @@ export default function Cashier() {
 
   const openWhatsApp = () => {
     const data = lastTransaction || formData;
-    if (!data.customerPhone || data.totalPrice <= 0) return alert("Nomor HP dan total harga harus ada");
+    if (!data.customerPhone || data.totalPrice <= 0) {
+      setFeedback({ type: 'warning', message: 'Nomor HP dan total harga harus ada untuk kirim WA.' });
+      return;
+    }
     let phone = data.customerPhone;
     if (phone.startsWith('0')) phone = '62' + phone.slice(1);
 

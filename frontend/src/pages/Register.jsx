@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
 import { Store, ArrowRight } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -18,10 +19,10 @@ export default function Register() {
     setLoading(true);
     try {
       await authService.register(formData);
-      alert("Bisnis berhasil didaftarkan! Silakan Login.");
-      navigate('/login');
+      toast.success('Bisnis berhasil didaftarkan! Silakan login.');
+      setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal daftar");
+      toast.error(err.response?.data?.error || 'Gagal mendaftar. Periksa kembali data Anda.');
     } finally {
       setLoading(false);
     }
@@ -109,6 +110,7 @@ export default function Register() {
           </div>
         </div>
       </div>
+      <Toaster position="bottom-right" />
     </div>
   );
 }

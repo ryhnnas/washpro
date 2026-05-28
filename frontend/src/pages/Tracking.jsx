@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/axios';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -44,8 +45,9 @@ export default function Tracking() {
   const [filter, setFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [toast, setToast] = useState(null); // { type, message }
+  const [toast, setToast] = useState(null);
   const [overdueCount, setOverdueCount] = useState(0);
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, id: null, currentStatus: null });
 
   const fetchTransactions = async (currentPage = page) => {
     setLoading(true);
@@ -73,7 +75,14 @@ export default function Tracking() {
   const handleUpdateStatus = async (id, currentStatus) => {
     const next = NEXT_STATUS[currentStatus];
     if (!next) return;
-    if (!window.confirm(`Yakin memindahkan status pesanan ini ke ${next}?`)) return;
+    // Buka confirm dialog, eksekusi setelah konfirmasi
+    setConfirmDialog({ isOpen: true, id, currentStatus });
+  };
+
+  const handleConfirmStatusUpdate = async () => {
+    const { id, currentStatus } = confirmDialog;
+    const next = NEXT_STATUS[currentStatus];
+    setConfirmDialog({ isOpen: false, id: null, currentStatus: null });
     try {
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: next } : t));
       const res = await api.patch(`/transactions/${id}/status`, { status: next });
@@ -256,6 +265,16 @@ export default function Tracking() {
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title="Perbarui Status Pesanan"
+        message={`Pindahkan pesanan ini ke status "${NEXT_STATUS[confirmDialog.currentStatus]}"? Notifikasi WhatsApp akan dikirim ke pelanggan jika diaktifkan.`}
+        confirmLabel="Ya, Pindahkan"
+        confirmVariant="primary"
+        onConfirm={handleConfirmStatusUpdate}
+        onCancel={() => setConfirmDialog({ isOpen: false, id: null, currentStatus: null })}
+      />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { Edit, Trash2, Search, Save, X, ChevronLeft, ChevronRight, Filter, Gift,
 import api from '../lib/axios';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import toast, { Toaster } from 'react-hot-toast';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -20,12 +22,17 @@ export default function Customers() {
   const [newMembershipCustomer, setNewMembershipCustomer] = useState({ name: '', phone: '', address: '', templateId: '' });
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [targetCustomerId, setTargetCustomerId] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
   const { user } = useAuth();
   const { settings } = useApp();
   const isOwner = user?.role === 'OWNER';
-  // Ambil membershipPackages dari context, tidak fetch ulang
   const membershipPackages = settings?.membershipPackages || [];
+
+  const openConfirm = (title, message, onConfirm) =>
+    setConfirmDialog({ isOpen: true, title, message, onConfirm });
+  const closeConfirm = () =>
+    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -77,7 +84,7 @@ export default function Customers() {
       setFormData({ name: '', phone: '', address: '' });
       fetchCustomers();
     } catch (err) {
-      alert("Gagal menyimpan data pelanggan. Pastikan nomor HP tidak duplikat.");
+      toast.error('Gagal menyimpan data pelanggan. Pastikan nomor HP tidak duplikat.');
     }
     setLoading(false);
   };
@@ -90,38 +97,53 @@ export default function Customers() {
     }
 
     const tid = templateId || (membershipPackages.length > 0 ? membershipPackages[0].id : null);
-    if (!tid) return alert('Tidak ada paket membership yang tersedia.');
-
-    if (!window.confirm('Aktifkan paket membership ini?')) return;
-    try {
-      await api.post(`/customers/${id}/membership/activate`, { templateId: tid });
-      setShowPackageModal(false);
-      fetchCustomers();
-    } catch (err) {
-      alert(err.response?.data?.message || err.response?.data?.error || 'Gagal aktivasi membership');
+    if (!tid) {
+      toast.error('Tidak ada paket membership yang tersedia.');
+      return;
     }
+
+    openConfirm(
+      'Aktifkan Membership',
+      'Aktifkan paket membership untuk pelanggan ini? Membership aktif sebelumnya akan dibatalkan.',
+      async () => {
+        try {
+          await api.post(`/customers/${id}/membership/activate`, { templateId: tid });
+          setShowPackageModal(false);
+          toast.success('Membership berhasil diaktifkan.');
+          fetchCustomers();
+        } catch (err) {
+          toast.error(err.response?.data?.message || err.response?.data?.error || 'Gagal aktivasi membership');
+        }
+      }
+    );
   };
 
   const handleDelete = async (id) => {
-     if(!window.confirm("Yakin ingin menghapus riwayat pelanggan ini?")) return;
-     try {
-       await api.delete(`/customers/${id}`);
-       fetchCustomers();
-     } catch (err) {
-       alert("Gagal menghapus. Pelanggan ini mungkin sedang memiliki status transaksi aktif.");
-     }
+    openConfirm(
+      'Hapus Pelanggan',
+      'Data pelanggan ini akan dihapus permanen. Aksi ini tidak dapat dibatalkan.',
+      async () => {
+        try {
+          await api.delete(`/customers/${id}`);
+          toast.success('Pelanggan berhasil dihapus.');
+          fetchCustomers();
+        } catch (err) {
+          toast.error('Gagal menghapus. Pelanggan ini mungkin masih memiliki transaksi aktif.');
+        }
+      }
+    );
   };
 
   const handleCreateCustomerWithMembership = async (e) => {
     e.preventDefault();
     try {
       await api.post('/customers/with-membership', newMembershipCustomer);
-      setNewMembershipCustomer({ name: '', phone: '', address: '' });
+      setNewMembershipCustomer({ name: '', phone: '', address: '', templateId: '' });
       setShowAddMembershipForm(false);
       fetchCustomers();
-      alert('Customer + membership berhasil dibuat.');
+      toast.success('Customer + membership berhasil dibuat.');
     } catch (err) {
-      alert(err.response?.data?.message || err.response?.data?.error || 'Gagal membuat customer membership');
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Gagal membuat customer membership');
     }
   };
 
@@ -374,6 +396,15 @@ export default function Customers() {
            </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={() => { confirmDialog.onConfirm?.(); closeConfirm(); }}
+        onCancel={closeConfirm}
+      />
+      <Toaster position="bottom-right" />
     </div>
   );
 }
