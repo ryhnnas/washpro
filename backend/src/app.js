@@ -3,7 +3,16 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 require('dotenv').config({ path: '../.env' });
+
+// ==================== ENV VALIDATION ====================
+const requiredEnv = ['JWT_SECRET', 'SUPERADMIN_JWT_SECRET', 'DATABASE_URL'];
+const missingEnv = requiredEnv.filter((k) => !process.env[k]);
+if (missingEnv.length > 0) {
+  console.error(`❌ [Startup] Missing required environment variables: ${missingEnv.join(', ')}`);
+  process.exit(1);
+}
 
 const authRoutes = require('./routes/authRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
@@ -57,12 +66,11 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// 5. Body Parser with Size Limit (5mb untuk mendukung upload bukti bayar base64)
-app.use(express.json({ limit: '5mb' }));
+// 5. Body Parser — limit kecil karena upload pakai multipart (multer), bukan base64 JSON
+app.use(express.json({ limit: '100kb' }));
 
 // Serve static files (foto bukti bayar)
-const path = require('path');
-app.use('/uploads', require('express').static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Gunakan Routes
 app.use('/api/auth', authRoutes);
@@ -76,6 +84,9 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/superadmin', superAdminRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 // Test Route
 app.get('/', (req, res) => res.send("WashPro API Active"));

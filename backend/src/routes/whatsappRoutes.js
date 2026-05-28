@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
+const protected = require('../middleware/protected');
 const {
   getStatus,
   connectQR,
@@ -9,10 +9,10 @@ const {
   sendTestMessage
 } = require('../controllers/whatsappController');
 
-router.get('/status', authMiddleware, getStatus);
-router.post('/connect/qr', authMiddleware, connectQR);
-router.post('/connect/pairing', authMiddleware, connectPairing);
-router.post('/disconnect', authMiddleware, disconnect);
-router.post('/test-message', authMiddleware, sendTestMessage);
+router.get('/status', protected, getStatus);
+router.post('/connect/qr', protected, connectQR);
+router.post('/connect/pairing', protected, connectPairing);
+router.post('/disconnect', protected, disconnect);
+router.post('/test-message', protected, sendTestMessage);
 
 module.exports = router;

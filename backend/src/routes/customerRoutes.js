@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
+const protected = require('../middleware/protected');
 const validate = require('../middleware/validator');
 const { customerSchema, activateMembershipSchema, createWithMembershipSchema } = require('../schemas/customerSchema');
 const {
@@ -13,12 +13,12 @@ const {
   deleteCustomer,
 } = require('../controllers/customerController');
 
-router.get('/', authMiddleware, getCustomers);
-router.post('/', authMiddleware, validate(customerSchema), createCustomer);
-router.post('/with-membership', authMiddleware, validate(createWithMembershipSchema), createCustomerWithMembership);
-router.put('/:id', authMiddleware, validate(customerSchema), updateCustomer);
-router.post('/:id/membership/activate', authMiddleware, validate(activateMembershipSchema), activateMembership);
-router.get('/memberships/:id/usage', authMiddleware, getMembershipUsage);
-router.delete('/:id', authMiddleware, deleteCustomer);
+router.get('/', protected, getCustomers);
+router.post('/', protected, validate(customerSchema), createCustomer);
+router.post('/with-membership', protected, validate(createWithMembershipSchema), createCustomerWithMembership);
+router.put('/:id', protected, validate(customerSchema), updateCustomer);
+router.post('/:id/membership/activate', protected, validate(activateMembershipSchema), activateMembership);
+router.get('/memberships/:id/usage', protected, getMembershipUsage);
+router.delete('/:id', protected, deleteCustomer);
 
 module.exports = router;

@@ -13,10 +13,15 @@ const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) return res.status(401).json({ message: 'Password salah' });
 
+    const secret = process.env.SUPERADMIN_JWT_SECRET;
+    if (!secret) {
+      return res.status(500).json({ message: 'Konfigurasi server tidak lengkap' });
+    }
+
     const token = jwt.sign(
       { id: admin.id, role: 'SUPERADMIN' },
-      process.env.JWT_SECRET,
-      { expiresIn: '1d' }
+      secret,
+      { expiresIn: '8h' }
     );
 
     res.json({

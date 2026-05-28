@@ -220,10 +220,17 @@ const sendMessage = async ({ businessId, phone, message, skipQueue = false }) =>
     return { ok: false, skipped: true, reason: 'WA_DISABLED_GLOBALLY' };
   }
 
-  const session = await prisma.whatsAppSession.findUnique({ where: { businessId } });
+  // SUPERADMIN tidak punya FK ke Business table — skip queue, langsung kirim atau skip
+  const isSuperAdmin = businessId === 'SUPERADMIN';
+
+  const session = await prisma.whatsAppSession.findUnique({ where: { businessId } }).catch(() => null);
   
   // Jika tidak terkoneksi dan bukan dari worker queue, masukkan ke queue
+  // (SUPERADMIN tidak masuk queue karena tidak ada FK target di Business)
   if ((!session || session.status !== 'connected') && !skipQueue) {
+    if (isSuperAdmin) {
+      return { ok: false, skipped: true, reason: 'SUPERADMIN_WA_NOT_CONNECTED' };
+    }
     await whatsappQueueService.addToQueue({ businessId, phone: target, message });
     return { ok: false, queued: true, reason: 'SESSION_NOT_CONNECTED' };
   }
@@ -248,7 +255,8 @@ const sendMessage = async ({ businessId, phone, message, skipQueue = false }) =>
       }
 
       // Jika gagal sistem (5xx atau timeout), masukkan ke queue jika belum di queue
-      if (!skipQueue && (res.status >= 500 || res.status === 401)) {
+      // SUPERADMIN tidak masuk queue (tidak ada FK target)
+      if (!skipQueue && !isSuperAdmin && (res.status >= 500 || res.status === 401)) {
         await whatsappQueueService.addToQueue({ businessId, phone: target, message });
         return { ok: false, queued: true, status: res.status, error: data?.message || data?.error || `HTTP ${res.status}` };
       }
@@ -258,7 +266,8 @@ const sendMessage = async ({ businessId, phone, message, skipQueue = false }) =>
     return { ok: true, data };
   } catch (err) {
     // Jika timeout atau network error, masukkan ke queue
-    if (!skipQueue) {
+    // SUPERADMIN tidak masuk queue (tidak ada FK target)
+    if (!skipQueue && !isSuperAdmin) {
       await whatsappQueueService.addToQueue({ businessId, phone: target, message });
       return { ok: false, queued: true, error: err.message };
     }

@@ -12,6 +12,7 @@ export default function Paywall() {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [status, setStatus] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [qrisInfo, setQrisInfo] = useState(null);
   const [proofFile, setProofFile] = useState(null);
   const [proofPreview, setProofPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -22,26 +23,19 @@ export default function Paywall() {
   const fileInputRef = useRef();
   const navigate = useNavigate();
 
-  // Raw Static QRIS Payload (DANA Bisnis)
-  const STATIC_QRIS_PAYLOAD = '00020101021126570011ID.DANA.WWW011893600915300040105002090004010500303UMI51440014ID.CO.QRIS.WWW0215ID10264697174030303UMI5204581253033605802ID5925Seblak Mledak Sindangsari6015Kabupaten Kunin6105455736304D373';
-  
-  const OWNER_BANK_INFO = {
-    nama: 'WashPro',
-    bank: 'QRIS DANA Bisnis',
-    nomor: 'Nominal Otomatis',
-  };
-
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [plansRes, statusRes, paymentsRes] = await Promise.all([
+        const [plansRes, statusRes, paymentsRes, qrisRes] = await Promise.all([
           api.get('/subscriptions/plans'),
           api.get('/subscriptions/status'),
           api.get('/subscriptions/payments'),
+          api.get('/subscriptions/qris').catch(() => ({ data: null })),
         ]);
         setPlans(plansRes.data);
         setStatus(statusRes.data);
         setPayments(paymentsRes.data);
+        setQrisInfo(qrisRes.data);
         if (statusRes.data?.businessPhone) setPhone(statusRes.data.businessPhone);
         if (plansRes.data.length > 0) setSelectedPlan(plansRes.data[0]);
       } catch (err) {
@@ -56,8 +50,8 @@ export default function Paywall() {
       setErrorMsg('File harus berupa gambar (JPG, PNG, dll)');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg('Ukuran gambar maksimal 5MB');
+    if (file.size > 3 * 1024 * 1024) {
+      setErrorMsg('Ukuran gambar maksimal 3MB');
       return;
     }
     setErrorMsg('');
@@ -77,30 +71,31 @@ export default function Paywall() {
   const handleSubmit = async () => {
     if (!selectedPlan) return setErrorMsg('Pilih paket terlebih dahulu');
     if (!proofFile) return setErrorMsg('Harap unggah bukti pembayaran');
+    if (!phone) return setErrorMsg('Nomor WhatsApp wajib diisi untuk notifikasi');
     setLoading(true);
     setErrorMsg('');
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target.result;
-        await api.post('/subscriptions/pay', {
-          planId: selectedPlan.id,
-          proofOfPayment: base64,
-          paymentMethod: 'QRIS_DANA',
-          phone,
-        });
-        setSuccessMsg('Bukti pembayaran berhasil dikirim! Admin akan memverifikasi dalam 1x24 jam. Anda akan menerima notifikasi WhatsApp setelah dikonfirmasi.');
-        setProofFile(null);
-        setProofPreview(null);
-        // Refresh data
-        const [statusRes, paymentsRes] = await Promise.all([
-          api.get('/subscriptions/status'),
-          api.get('/subscriptions/payments'),
-        ]);
-        setStatus(statusRes.data);
-        setPayments(paymentsRes.data);
-      };
-      reader.readAsDataURL(proofFile);
+      // Gunakan FormData (multipart) — lebih efisien dari base64 JSON
+      const formData = new FormData();
+      formData.append('planId', selectedPlan.id);
+      formData.append('proofOfPayment', proofFile);
+      formData.append('paymentMethod', 'QRIS_DANA');
+      formData.append('phone', phone);
+
+      await api.post('/subscriptions/pay', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setSuccessMsg('Bukti pembayaran berhasil dikirim! Admin akan memverifikasi dalam 1x24 jam. Anda akan menerima notifikasi WhatsApp setelah dikonfirmasi.');
+      setProofFile(null);
+      setProofPreview(null);
+      // Refresh data
+      const [statusRes, paymentsRes] = await Promise.all([
+        api.get('/subscriptions/status'),
+        api.get('/subscriptions/payments'),
+      ]);
+      setStatus(statusRes.data);
+      setPayments(paymentsRes.data);
     } catch (err) {
       setErrorMsg(err.response?.data?.message || 'Gagal mengirim bukti pembayaran');
     } finally {
@@ -212,24 +207,30 @@ export default function Paywall() {
                 <h2 className="text-white font-bold text-lg mb-4">2. Scan QRIS & Transfer</h2>
                 <div className="bg-white rounded-xl p-4 flex flex-col items-center gap-3">
                   <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100 flex items-center justify-center">
-                    <QRCodeSVG
-                      value={generateDynamicQRIS(STATIC_QRIS_PAYLOAD, selectedPlan.price)}
-                      size={200}
-                      level="H"
-                      includeMargin={true}
-                      imageSettings={{
-                        src: '/logo.png',
-                        x: undefined,
-                        y: undefined,
-                        height: 36,
-                        width: 36,
-                        excavate: true,
-                      }}
-                    />
+                    {qrisInfo?.payload ? (
+                      <QRCodeSVG
+                        value={generateDynamicQRIS(qrisInfo.payload, selectedPlan.price)}
+                        size={200}
+                        level="H"
+                        includeMargin={true}
+                        imageSettings={{
+                          src: '/logo.png',
+                          x: undefined,
+                          y: undefined,
+                          height: 36,
+                          width: 36,
+                          excavate: true,
+                        }}
+                      />
+                    ) : (
+                      <div className="w-[200px] h-[200px] flex items-center justify-center text-slate-400 text-xs text-center p-4">
+                        QRIS belum dikonfigurasi. Hubungi administrator.
+                      </div>
+                    )}
                   </div>
                   <div className="text-center">
-                    <p className="text-slate-700 font-bold text-sm">{OWNER_BANK_INFO.nama}</p>
-                    <p className="text-slate-500 text-xs">{OWNER_BANK_INFO.bank} · {OWNER_BANK_INFO.nomor}</p>
+                    <p className="text-slate-700 font-bold text-sm">{qrisInfo?.merchantName || 'WashPro'}</p>
+                    <p className="text-slate-500 text-xs">{qrisInfo?.merchantBank || 'QRIS'} · Nominal Otomatis</p>
                   </div>
                 </div>
                 <div className="mt-3 bg-blue-500/10 border border-blue-400/20 rounded-xl p-3 text-center">
@@ -280,7 +281,7 @@ export default function Paywall() {
                     </div>
                     <p className="text-slate-300 font-medium text-center">Seret & lepas foto bukti di sini</p>
                     <p className="text-slate-500 text-sm text-center">atau klik untuk memilih file</p>
-                    <p className="text-slate-600 text-xs">JPG, PNG, WEBP — maks. 5MB</p>
+                    <p className="text-slate-600 text-xs">JPG, PNG, WEBP — maks. 3MB</p>
                   </>
                 )}
               </div>

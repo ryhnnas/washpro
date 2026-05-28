@@ -29,3 +29,4 @@ const authorizeRole = (...allowedRoles) => {
 authMiddleware.authorizeRole = authorizeRole;
 
 module.exports = authMiddleware;
+module.exports.authorizeRole = authorizeRole;

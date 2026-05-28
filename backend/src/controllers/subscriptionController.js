@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const path = require('path');
 const fs = require('fs');
+const { sendMessage } = require('../services/whatsappService');
 
 // Konstanta: trial 7 hari
 const TRIAL_DAYS = 7;
@@ -66,17 +67,18 @@ const getPlans = async (req, res) => {
 
 // ==================== UPLOAD BUKTI BAYAR ====================
 /**
- * Endpoint ini menerima bukti pembayaran berupa Base64 image string.
- * Image disimpan di backend/uploads/payments/
+ * Endpoint ini menerima bukti pembayaran via multipart/form-data (multer).
+ * File disimpan di backend/uploads/payments/
  * Untuk produksi, idealnya ganti dengan cloud storage (S3/Cloudinary).
  */
 const submitPayment = async (req, res) => {
   try {
     const businessId = req.user.businessId;
-    const { planId, proofOfPayment, paymentMethod = 'QRIS_DANA', phone } = req.body;
+    const { planId, paymentMethod = 'QRIS_DANA', phone } = req.body;
+    const file = req.file; // disediakan oleh multer (handleUpload middleware)
 
     if (!planId) return res.status(400).json({ message: 'planId wajib diisi' });
-    if (!proofOfPayment) return res.status(400).json({ message: 'Bukti pembayaran wajib diunggah' });
+    if (!file) return res.status(400).json({ message: 'Bukti pembayaran wajib diunggah' });
 
     // Validasi plan ada dan aktif
     const plan = await prisma.subscriptionPlan.findFirst({ where: { id: planId, isActive: true } });
@@ -87,24 +89,14 @@ const submitPayment = async (req, res) => {
       where: { businessId, status: 'PENDING' },
     });
     if (existingPending) {
+      // Hapus file yang baru diupload karena tidak akan dipakai
+      fs.unlink(file.path, () => {});
       return res.status(400).json({
         message: 'Anda sudah memiliki pembayaran yang sedang menunggu konfirmasi Admin. Mohon tunggu.',
       });
     }
 
-    // Simpan file bukti bayar (Base64 → File)
-    let proofUrl = proofOfPayment; // Default: simpan URL/base64 as-is
-    if (proofOfPayment.startsWith('data:image')) {
-      const uploadsDir = path.join(__dirname, '../../uploads/payments');
-      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
-
-      const ext = proofOfPayment.substring(proofOfPayment.indexOf('/') + 1, proofOfPayment.indexOf(';'));
-      const fileName = `proof_${businessId}_${Date.now()}.${ext}`;
-      const filePath = path.join(uploadsDir, fileName);
-      const base64Data = proofOfPayment.replace(/^data:image\/\w+;base64,/, '');
-      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
-      proofUrl = `/uploads/payments/${fileName}`;
-    }
+    const proofUrl = `/uploads/payments/${file.filename}`;
 
     // Buat record pembayaran & update status bisnis ke PENDING_PAYMENT beserta nomor telepon
     const updateData = { subscriptionStatus: 'PENDING_PAYMENT' };
@@ -127,25 +119,24 @@ const submitPayment = async (req, res) => {
       }),
     ]);
 
-    // Kirim notifikasi WA via GOWA (SuperAdmin device)
-    const { sendMessage } = require('../services/whatsappService');
+    // Kirim notifikasi WA via GOWA (SuperAdmin device) — best-effort, tidak block response
     const superAdminPhone = process.env.SUPERADMIN_PHONE;
-    const ownerUser = await prisma.user.findFirst({ where: { businessId, role: 'OWNER' } });
-    const businessInfo = await prisma.business.findUnique({ where: { id: businessId } });
+    const [ownerUser, businessInfo] = await Promise.all([
+      prisma.user.findFirst({ where: { businessId, role: 'OWNER' } }),
+      prisma.business.findUnique({ where: { id: businessId } }),
+    ]);
     const ownerName = ownerUser?.name || businessInfo?.name || '-';
 
     // 1. Kirim notifikasi ke Tenant (konfirmasi bukti transfer diterima)
     if (phone) {
       const tenantMsg = `⏳ *WashPro - Pembayaran Diterima*\n${'━'.repeat(28)}\nHalo *${ownerName}*,\n\nTerima kasih! Bukti pembayaran untuk paket *${plan.name}* sebesar *Rp ${plan.price.toLocaleString('id-ID')}* telah kami terima.\n\nPembayaran Anda sedang dalam proses verifikasi oleh Tim Admin (maks. 1x24 jam). Anda akan menerima notifikasi WA setelah dikonfirmasi.\n\n_Tim WashPro_`;
-      sendMessage({ businessId: 'SUPERADMIN', phone, message: tenantMsg })
-        .catch(() => {});
+      sendMessage({ businessId: 'SUPERADMIN', phone, message: tenantMsg }).catch(() => {});
     }
 
     // 2. Kirim notifikasi ke SuperAdmin (peringatan ada pembayaran masuk)
     if (superAdminPhone) {
       const adminMsg = `🚨 *[WashPro Admin] Pembayaran Baru Menunggu Konfirmasi*\n${'━'.repeat(28)}\n🏪 Toko    : *${businessInfo?.name}*\n👤 Pemilik : ${ownerName}\n📦 Paket   : ${plan.name}\n💰 Nominal : Rp ${plan.price.toLocaleString('id-ID')}\n\nSegera buka Dashboard Superadmin untuk memverifikasi bukti pembayaran.\n_Notifikasi otomatis dari Sistem WashPro_`;
-      sendMessage({ businessId: 'SUPERADMIN', phone: superAdminPhone, message: adminMsg })
-        .catch(() => {});
+      sendMessage({ businessId: 'SUPERADMIN', phone: superAdminPhone, message: adminMsg }).catch(() => {});
     }
 
     res.status(201).json({
@@ -154,6 +145,8 @@ const submitPayment = async (req, res) => {
     });
   } catch (err) {
     console.error('[submitPayment] Error:', err.message);
+    // Hapus file jika ada error setelah upload
+    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: err.message });
   }
 };
@@ -173,4 +166,21 @@ const getMyPayments = async (req, res) => {
   }
 };
 
-module.exports = { getStatus, getPlans, submitPayment, getMyPayments };
+// ==================== QRIS INFO (payload dari env, tidak hardcode di frontend) ====================
+const getQrisInfo = async (req, res) => {
+  try {
+    const payload = process.env.QRIS_STATIC_PAYLOAD;
+    if (!payload) {
+      return res.status(503).json({ message: 'QRIS belum dikonfigurasi. Hubungi administrator.' });
+    }
+    res.json({
+      payload,
+      merchantName: process.env.QRIS_MERCHANT_NAME || 'WashPro',
+      merchantBank: process.env.QRIS_MERCHANT_BANK || 'QRIS',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+module.exports = { getStatus, getPlans, submitPayment, getMyPayments, getQrisInfo };

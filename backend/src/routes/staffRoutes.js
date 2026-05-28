@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
+const protected = require('../middleware/protected');
+const { authorizeRole } = require('../middleware/auth');
 const validate = require('../middleware/validator');
 const { staffSchema, createStaffSchema } = require('../schemas/staffSchema');
 const { getStaff, createStaff, deleteStaff, updateStaff } = require('../controllers/staffController');
 
-// Semua rute staff dilindungi dengan otentikasi JWT dan hanya untuk OWNER
-router.use(authMiddleware);
-router.use(authMiddleware.authorizeRole('OWNER'));
+// Semua rute staff dilindungi dengan autentikasi + subscription aktif + hanya OWNER
+router.use(protected);
+router.use(authorizeRole('OWNER'));
 
 router.get('/', getStaff);
 router.post('/', validate(createStaffSchema), createStaff);
