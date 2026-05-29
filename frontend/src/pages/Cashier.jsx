@@ -3,6 +3,16 @@ import { Send, Save, User, Package, Calendar, Search, MessageCircle, CheckCircle
 import api from '../lib/axios';
 import { useApp } from '../context/AppContext';
 
+/**
+ * CATATAN PENTING — MEMBERSHIP COVERAGE CALCULATION
+ * 
+ * Logika preview membership di komponen ini (useEffect membershipPreview)
+ * HARUS SINKRON dengan backend: backend/src/services/membershipService.js → calculateCoverage()
+ * 
+ * Frontend hanya menampilkan PREVIEW (estimasi). Backend adalah source of truth.
+ * Jika ada perubahan di logika coverage backend, update juga preview di sini.
+ */
+
 export default function Cashier() {
   const [services, setServices] = useState([]);
   const [customers, setCustomers] = useState([]);

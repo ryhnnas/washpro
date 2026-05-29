@@ -1,11 +1,12 @@
 const prisma = require('../config/prisma');
 const membershipService = require('../services/membershipService');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
+const { sendError } = require('../utils/errorResponse');
 
 const getCustomers = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search = '', membershipStatus } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const take = parseInt(limit);
+    const { skip, take, page, limit } = parsePagination(req.query);
+    const { search = '', membershipStatus } = req.query;
 
     let whereClause = { businessId: req.user.businessId };
 
@@ -84,14 +85,10 @@ const getCustomers = async (req, res) => {
 
     res.json({
       data: enriched,
-      pagination: {
-        totalItems: totalCount,
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / take),
-      },
+      pagination: buildPaginationMeta(totalCount, page, limit),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal memuat daftar pelanggan');
   }
 };
 
@@ -121,7 +118,7 @@ const createCustomer = async (req, res) => {
       });
       res.status(201).json(fallback);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      sendError(res, e, 500);
     }
   }
 };
@@ -160,7 +157,7 @@ const createCustomerWithMembership = async (req, res) => {
     });
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -174,7 +171,7 @@ const updateCustomer = async (req, res) => {
     });
     res.json(customer);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -195,7 +192,7 @@ const activateMembership = async (req, res) => {
     });
     res.json({ message: 'Membership berhasil diaktifkan' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -221,7 +218,7 @@ const getMembershipUsage = async (req, res) => {
     if (!membership) return res.status(404).json({ error: 'Membership tidak ditemukan' });
     res.json(membership);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 

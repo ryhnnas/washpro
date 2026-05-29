@@ -14,6 +14,7 @@ const getStaff = async (req, res) => {
         id: true,
         name: true,
         email: true,
+        phone: true,
         createdAt: true
       }
     });
@@ -25,7 +26,7 @@ const getStaff = async (req, res) => {
 
 // Buat akun staff baru (hanya bisa diakses owner)
 const createStaff = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, phone } = req.body;
   try {
     // Validasi apakah hanya OWNER yang bisa create
     if (req.user.role !== 'OWNER') {
@@ -47,10 +48,11 @@ const createStaff = async (req, res) => {
         name,
         email,
         password: hashedPassword,
+        phone: phone || null,
         role: 'STAFF',
         businessId: businessId
       },
-      select: { id: true, name: true, email: true, createdAt: true }
+      select: { id: true, name: true, email: true, phone: true, createdAt: true }
     });
 
     res.status(201).json({ message: "Staf berhasil ditambahkan", data: newStaff });
@@ -92,7 +94,7 @@ const deleteStaff = async (req, res) => {
 // Update staff (Hanya bisa diakses owner)
 const updateStaff = async (req, res) => {
   const { id } = req.params;
-  const { name, email, password } = req.body;
+  const { name, email, password, phone } = req.body;
   try {
     // Validasi OWNER
     if (req.user.role !== 'OWNER') {
@@ -117,10 +119,15 @@ const updateStaff = async (req, res) => {
       updateData.password = await bcrypt.hash(password, 10);
     }
 
+    // Update phone (bisa di-set atau di-clear)
+    if (phone !== undefined) {
+      updateData.phone = phone || null;
+    }
+
     const updatedStaff = await prisma.user.update({
       where: { id: id },
       data: updateData,
-      select: { id: true, name: true, email: true, updatedAt: true }
+      select: { id: true, name: true, email: true, phone: true, updatedAt: true }
     });
 
     res.json({ message: "Staf berhasil diperbarui", data: updatedStaff });

@@ -4,11 +4,11 @@
  * 2. Subscription aktif (checkSubscription)
  *
  * Gunakan sebagai pengganti authMiddleware di route yang perlu dilindungi subscription.
- * Contoh: router.get('/', protected, getServices);
+ * Contoh: router.get('/', protectedRoute, getServices);
  */
 const authMiddleware = require('./auth');
 const checkSubscription = require('./checkSubscription');
 
-const protected = [authMiddleware, checkSubscription];
+const protectedRoute = [authMiddleware, checkSubscription];
 
-module.exports = protected;
+module.exports = protectedRoute;

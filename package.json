@@ -7,13 +7,17 @@
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
     "install-all": "npm install && npm install --workspace=backend && npm install --workspace=frontend",
     "backend": "npm run dev --workspace=backend",
-    "frontend": "npm run dev --workspace=frontend"
+    "frontend": "npm run dev --workspace=frontend",
+    "test:e2e": "npx playwright test",
+    "test:e2e:ui": "npx playwright test --ui",
+    "test:e2e:headed": "npx playwright test --headed"
   },
   "workspaces": [
     "backend",
     "frontend"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "concurrently": "^8.2.2"
   }
 }

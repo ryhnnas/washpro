@@ -3,10 +3,21 @@ const prisma = require('../config/prisma');
 /**
  * In-memory subscription cache.
  * Key: businessId, Value: { data, expiresAt }
- * TTL: 5 menit — cukup untuk mengurangi DB load tanpa delay terlalu lama saat status berubah.
+ * 
+ * TTL: 60 detik — trade-off antara DB load dan freshness.
+ * 
+ * ⚠️  CATATAN DEPLOYMENT:
+ * Cache ini hanya berlaku per-instance (in-memory). Jika backend di-deploy
+ * di multiple instances (PM2 cluster, Kubernetes), setiap instance punya cache sendiri.
+ * Untuk multi-instance deployment, gunakan Redis sebagai shared cache.
+ * 
+ * Mitigasi saat ini:
+ * - TTL pendek (60 detik) meminimalkan window inconsistency
+ * - Semua mutation paths (approve/reject payment, toggle business) memanggil invalidateSubscriptionCache()
+ * - Worst case: user menunggu max 60 detik setelah status berubah di instance lain
  */
 const subscriptionCache = new Map();
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
+const CACHE_TTL_MS = 60 * 1000; // 60 detik (turun dari 5 menit untuk konsistensi lebih baik)
 
 const getSubscriptionData = async (businessId) => {
   const cached = subscriptionCache.get(businessId);
@@ -120,3 +131,7 @@ const checkSubscription = async (req, res, next) => {
 
 module.exports = checkSubscription;
 module.exports.invalidateSubscriptionCache = invalidateSubscriptionCache;
+module.exports.getCacheStats = () => ({
+  size: subscriptionCache.size,
+  ttlMs: CACHE_TTL_MS,
+});

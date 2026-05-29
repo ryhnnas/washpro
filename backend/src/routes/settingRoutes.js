@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const protected = require('../middleware/protected');
+const protectedRoute = require('../middleware/protected');
 const { authorizeRole } = require('../middleware/auth');
 const validate = require('../middleware/validator');
 const { updateSettingSchema } = require('../schemas/settingSchema');
-const { getSettings, updateSettings } = require('../controllers/settingController');
+const { getSettings, getPublicSettings, updateSettings } = require('../controllers/settingController');
 
-router.get('/', protected, authorizeRole('OWNER'), getSettings);
-router.put('/', protected, authorizeRole('OWNER'), validate(updateSettingSchema), updateSettings);
+// Public settings — accessible by all authenticated roles (OWNER & STAFF)
+router.get('/public', protectedRoute, getPublicSettings);
+
+// Full settings — OWNER only
+router.get('/', protectedRoute, authorizeRole('OWNER'), getSettings);
+router.put('/', protectedRoute, authorizeRole('OWNER'), validate(updateSettingSchema), updateSettings);
 
 module.exports = router;

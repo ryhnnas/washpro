@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const { sendError } = require('../utils/errorResponse');
 
 const getDashboardStats = async (req, res) => {
   try {
@@ -76,7 +77,7 @@ const getDashboardStats = async (req, res) => {
       todayOrders,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -126,7 +127,7 @@ const getRevenueTrend = async (req, res) => {
 
     res.json({ data });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 

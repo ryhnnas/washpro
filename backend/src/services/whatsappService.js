@@ -377,19 +377,25 @@ const sendStatusUpdate = async ({ businessId, transaction }) => {
 
 
 // 3. Health Checker Loop (Bisa dipanggil di server start)
+// Optimized: runs every 5 min, max 10 sessions per cycle,
+// random jitter (0-30s) between checks to avoid thundering herd.
 const startHealthCheck = () => {
   const intervalId = setInterval(async () => {
     try {
       const activeSessions = await prisma.whatsAppSession.findMany({
-        where: { status: { in: ['connected', 'connecting'] } }
+        where: { status: { in: ['connected', 'connecting'] } },
+        take: 10,
       });
+      console.log(`[WhatsApp Health Check] Checking ${activeSessions.length} session(s)...`);
       for (const session of activeSessions) {
+        // Random jitter 0-30s between each check to spread load
+        await new Promise(r => setTimeout(r, Math.random() * 30000));
         await checkConnectionStatus(session.businessId);
       }
     } catch (err) {
       console.error('WhatsApp Health Check Error:', err.message);
     }
-  }, 60000);
+  }, 300000);
 
   // Return intervalId agar bisa di-clear saat graceful shutdown
   return intervalId;

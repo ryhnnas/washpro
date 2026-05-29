@@ -28,3 +28,10 @@ build/
 
 # Uploaded payment proofs and other tenant uploads
 backend/uploads/
+
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+e2e/.auth/

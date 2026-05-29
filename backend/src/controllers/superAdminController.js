@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const whatsappService = require('../services/whatsappService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
+const { sendError } = require('../utils/errorResponse');
 
 // ==================== LOGIN ====================
 const login = async (req, res) => {
@@ -31,7 +32,7 @@ const login = async (req, res) => {
       admin: { id: admin.id, name: admin.name, email: admin.email },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -63,7 +64,7 @@ const getDashboardStats = async (req, res) => {
       monthlyRevenue: monthlyRevenue._sum.amount || 0,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -93,7 +94,7 @@ const getBusinesses = async (req, res) => {
 
     res.json({ businesses, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -115,7 +116,7 @@ const toggleBusiness = async (req, res) => {
 
     res.json({ message: `Toko berhasil ${action === 'SUSPEND' ? 'ditangguhkan' : 'diaktifkan'}`, business: updated });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -151,7 +152,7 @@ const deleteBusiness = async (req, res) => {
       message: `Toko "${business.name}" telah dinonaktifkan. Data masih tersimpan dan dapat dipulihkan oleh tim teknis jika diperlukan.`,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -180,7 +181,7 @@ const getPayments = async (req, res) => {
 
     res.json({ payments, total, page: Number(page), limit: Number(limit) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -239,7 +240,7 @@ const approvePayment = async (req, res) => {
       payment: updatedPayment,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -294,7 +295,7 @@ const rejectPayment = async (req, res) => {
 
     res.json({ message: 'Pembayaran berhasil ditolak.', payment: updatedPayment });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -304,7 +305,7 @@ const getPlans = async (req, res) => {
     const plans = await prisma.subscriptionPlan.findMany({ orderBy: { price: 'asc' } });
     res.json(plans);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -316,7 +317,7 @@ const upsertPlan = async (req, res) => {
       : await prisma.subscriptionPlan.create({ data: { name, price, durationDays, features, isActive } });
     res.json({ message: 'Paket berhasil disimpan', plan });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 

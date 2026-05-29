@@ -1,4 +1,5 @@
 const app = require('./app');
+const prisma = require('./config/prisma');
 const { startHealthCheck } = require('./services/whatsappService');
 const whatsappService = require('./services/whatsappService');
 const whatsappQueueService = require('./services/whatsappQueueService');
@@ -18,8 +19,9 @@ if (process.env.NODE_ENV !== 'test') {
   const shutdown = (signal) => {
     console.log(`\n[${signal}] Graceful shutdown dimulai...`);
     clearInterval(healthCheckInterval);
-    server.close(() => {
+    server.close(async () => {
       console.log('HTTP server ditutup.');
+      await prisma.$disconnect();
       process.exit(0);
     });
     // Force exit jika tidak selesai dalam 10 detik

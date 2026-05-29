@@ -109,14 +109,17 @@ model User {
   businessId String   @map("business_id")
   name       String
   email      String   @unique
+  phone      String?
   password   String
   role       Role     @default(STAFF)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business     Business      @relation(fields: [businessId], references: [id])
-  transactions Transaction[]
+  business          Business           @relation(fields: [businessId], references: [id])
+  transactions      Transaction[]
+  passwordResetOtps PasswordResetOtp[]
+  refreshTokens     RefreshToken[]
 
   @@index([businessId])
 }
@@ -124,6 +127,41 @@ model User {
 enum Role {
   OWNER
   STAFF
+}
+
+// =============================================
+// 2b. REFRESH TOKEN
+// =============================================
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")    // SHA-256 hash of the refresh token
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  userAgent String?   @db.Text @map("user_agent")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([tokenHash])
+}
+
+// =============================================
+// 2c. PASSWORD RESET OTP
+// =============================================
+model PasswordResetOtp {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  otp       String                          // Hashed (bcrypt)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  attempts  Int       @default(0)           // Max 5 percobaan
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 // =============================================

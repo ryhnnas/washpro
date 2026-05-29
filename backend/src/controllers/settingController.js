@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const whatsappService = require('../services/whatsappService');
+const { sendError } = require('../utils/errorResponse');
 
 const getSettings = async (req, res) => {
   try {
@@ -82,7 +83,7 @@ const getSettings = async (req, res) => {
       })),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -179,10 +180,85 @@ const updateSettings = async (req, res) => {
       whatsappNotificationStates,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
 
 
-module.exports = { getSettings, updateSettings };
+/**
+ * GET /api/settings/public
+ * Endpoint yang bisa diakses semua role (OWNER & STAFF).
+ * Return subset settings yang dibutuhkan untuk operasional (kasir, menu visibility).
+ * Tidak mengekspos data sensitif seperti WA templates atau konfigurasi admin.
+ */
+const getPublicSettings = async (req, res) => {
+  try {
+    const businessId = req.user.businessId;
+
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      include: { setting: true },
+    });
+
+    if (!business) {
+      return res.status(404).json({ error: 'Bisnis tidak ditemukan.' });
+    }
+
+    const setting = business.setting;
+    if (!setting) {
+      return res.json({
+        businessName: business.name,
+        requireCustomerName: true,
+        requireCustomerPhone: true,
+        requireCustomerAddress: false,
+        staffAllowedMenus: JSON.stringify(['CASHIER', 'TRACKING']),
+        membershipPackages: [],
+      });
+    }
+
+    // Reconstruct staffAllowedMenus
+    const menus = ['CASHIER', 'TRACKING'];
+    if (setting.allowStaffDashboard) menus.push('DASHBOARD');
+    if (setting.allowStaffCustomers) menus.push('CUSTOMERS');
+    if (setting.allowStaffServices) menus.push('SERVICES');
+    if (setting.allowStaffReports) menus.push('REPORTS');
+    if (setting.allowStaffSettings) menus.push('SETTINGS');
+
+    // Membership packages (dibutuhkan kasir untuk preview coverage)
+    const membershipTemplates = await prisma.membershipPackageTemplate.findMany({
+      where: { businessId, isActive: true },
+      include: {
+        quotaItems: {
+          include: { service: { select: { id: true, name: true, unit: true } } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({
+      businessName: business.name,
+      requireCustomerName: setting.requireCustomerName,
+      requireCustomerPhone: setting.requireCustomerPhone,
+      requireCustomerAddress: setting.requireCustomerAddress,
+      staffAllowedMenus: JSON.stringify(menus),
+      membershipPackages: membershipTemplates.map((t) => ({
+        id: t.id,
+        name: t.name,
+        durationDays: t.durationDays,
+        items: t.quotaItems.map((i) => ({
+          id: i.id,
+          serviceId: i.serviceId,
+          serviceName: i.service.name,
+          unit: i.service.unit,
+          quotaAmount: i.quotaAmount,
+          deductionRate: i.deductionRate,
+        })),
+      })),
+    });
+  } catch (error) {
+    sendError(res, error, 500);
+  }
+};
+
+module.exports = { getSettings, getPublicSettings, updateSettings };

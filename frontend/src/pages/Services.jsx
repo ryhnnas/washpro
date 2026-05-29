@@ -206,7 +206,6 @@ export default function Services() {
                   </td>
                 </tr>
               ))}
-              ))}
             </tbody>
           </table>
         </div>

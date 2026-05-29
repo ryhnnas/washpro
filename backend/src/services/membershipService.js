@@ -1,5 +1,16 @@
 const prisma = require('../config/prisma');
 
+/**
+ * CATATAN PENTING — MEMBERSHIP COVERAGE CALCULATION
+ * 
+ * Logika calculateCoverage() di file ini adalah SOURCE OF TRUTH.
+ * Frontend (frontend/src/pages/Cashier.jsx) memiliki preview calculation
+ * yang harus SINKRON dengan logika di sini.
+ * 
+ * Jika ada perubahan di fungsi calculateCoverage(), update juga
+ * useEffect membershipPreview di Cashier.jsx.
+ */
+
 const isMembershipActive = (membership) => {
   if (!membership) return false;
   if (membership.status !== 'ACTIVE') return false;

@@ -12,12 +12,17 @@ export function AppProvider({ children }) {
 
   const fetchSettings = useCallback(async () => {
     if (!user) return;
-    // Hanya OWNER yang punya akses ke /settings
-    if (user.role !== 'OWNER') return;
     setSettingsLoading(true);
     try {
-      const res = await api.get('/settings');
-      setSettings(res.data);
+      if (user.role === 'OWNER') {
+        // OWNER mendapat full settings (termasuk WA templates, dll)
+        const res = await api.get('/settings');
+        setSettings(res.data);
+      } else {
+        // STAFF mendapat public settings (form requirements, menu visibility, membership packages)
+        const res = await api.get('/settings/public');
+        setSettings(res.data);
+      }
     } catch (err) {
       console.error('[AppContext] Gagal load settings:', err?.response?.status);
     } finally {

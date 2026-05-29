@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { sendMessage } = require('../services/whatsappService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
+const { sendError } = require('../utils/errorResponse');
 
 // Konstanta: trial 7 hari
 const TRIAL_DAYS = 7;
@@ -49,7 +50,7 @@ const getStatus = async (req, res) => {
       businessPhone: business.phone,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -62,7 +63,7 @@ const getPlans = async (req, res) => {
     });
     res.json(plans);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -150,7 +151,7 @@ const submitPayment = async (req, res) => {
     console.error('[submitPayment] Error:', err.message);
     // Hapus file jika ada error setelah upload
     if (req.file) fs.unlink(req.file.path, () => {});
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -165,7 +166,7 @@ const getMyPayments = async (req, res) => {
     });
     res.json(payments);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 
@@ -182,7 +183,7 @@ const getQrisInfo = async (req, res) => {
       merchantBank: process.env.QRIS_MERCHANT_BANK || 'QRIS',
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    sendError(res, err, 500);
   }
 };
 

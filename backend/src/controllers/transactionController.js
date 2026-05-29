@@ -1,12 +1,13 @@
 const prisma = require('../config/prisma');
 const whatsappService = require('../services/whatsappService');
 const membershipService = require('../services/membershipService');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
+const { sendError } = require('../utils/errorResponse');
 
 const getTransactions = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search = '', startDate, endDate } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const take = parseInt(limit);
+    const { skip, take, page, limit } = parsePagination(req.query);
+    const { search = '', startDate, endDate } = req.query;
 
     let whereClause = { businessId: req.user.businessId };
 
@@ -44,14 +45,10 @@ const getTransactions = async (req, res) => {
 
     res.json({
       data: enriched,
-      pagination: {
-        totalItems: totalCount,
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / take),
-      },
+      pagination: buildPaginationMeta(totalCount, page, limit),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal memuat daftar transaksi');
   }
 };
 
@@ -76,7 +73,7 @@ const getOverdueTransactions = async (req, res) => {
       })),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal memuat transaksi overdue');
   }
 };
 
@@ -281,7 +278,7 @@ const createTransaction = async (req, res) => {
 
     res.status(201).json({ ...transaction, whatsapp: waResult });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal menyimpan transaksi');
   }
 };
 
@@ -335,7 +332,7 @@ const updateStatus = async (req, res) => {
 
     res.json({ ...transaction, whatsapp: waResult });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal mengubah status transaksi');
   }
 };
 
@@ -354,7 +351,7 @@ const resendReceipt = async (req, res) => {
     });
     res.json({ message: 'Permintaan dikirim', whatsapp: result });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal mengirim ulang nota');
   }
 };
 
@@ -442,7 +439,7 @@ const getExportData = async (req, res) => {
       transactions,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal mengekspor data transaksi');
   }
 };
 
@@ -498,7 +495,7 @@ const getReportCharts = async (req, res) => {
 
     res.json({ dailyRevenue, statusBreakdown, topServices });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal memuat data laporan');
   }
 };
 

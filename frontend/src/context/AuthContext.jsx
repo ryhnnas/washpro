@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -12,16 +13,29 @@ export function AuthProvider({ children }) {
     }
   });
 
+  // Fetch CSRF token on app init (sets cookie for subsequent requests)
+  useEffect(() => {
+    authService.initCsrf();
+  }, []);
+
   const login = useCallback((token, userData) => {
+    // Token masih disimpan di localStorage untuk backward compat (misal mobile app)
+    // Tapi browser utama menggunakan httpOnly cookie yang di-set oleh server
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    try {
+      await authService.logout();
+    } catch {
+      // Fallback: redirect even if server call fails
+      window.location.href = '/';
+    }
   }, []);
 
   /**
