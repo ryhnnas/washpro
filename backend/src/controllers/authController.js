@@ -2,7 +2,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const whatsappService = require('../services/whatsappService');
+const emailService = require('../services/emailService');
 const { generateCsrfToken, setCsrfCookie } = require('../middleware/csrf');
 const { sendError } = require('../utils/errorResponse');
 
@@ -224,22 +224,11 @@ const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { business: { select: { phone: true } } },
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
 
     // Anti-enumeration: selalu return response yang sama
     if (!user) {
-      return res.json({ message: "Jika email terdaftar, kode OTP akan dikirim ke WhatsApp terdaftar." });
-    }
-
-    // Tentukan nomor tujuan: user.phone > business.phone
-    const targetPhone = user.phone || user.business?.phone;
-    if (!targetPhone) {
-      return res.status(400).json({
-        message: "Nomor WhatsApp belum terdaftar pada akun Anda. Hubungi pemilik usaha untuk reset password.",
-      });
+      return res.json({ message: "Jika email terdaftar, kode OTP akan dikirim ke email Anda." });
     }
 
     // Hapus OTP lama yang belum expired untuk user ini
@@ -261,18 +250,24 @@ const forgotPassword = async (req, res) => {
       },
     });
 
-    // Kirim OTP via WhatsApp SuperAdmin
-    const message = `🔐 *WashPro - Kode Reset Password*\n${'━'.repeat(28)}\n\nKode OTP Anda: *${otpPlain}*\n\nBerlaku 5 menit. Jangan bagikan kode ini kepada siapapun.\n\n_Jika Anda tidak merasa meminta reset password, abaikan pesan ini._`;
-
-    whatsappService.sendMessage({
-      businessId: 'SUPERADMIN',
-      phone: targetPhone,
-      message,
-    }).catch((err) => {
-      console.error('[FORGOT-PASSWORD] Gagal kirim OTP via WA:', err.message);
+    await emailService.sendEmail({
+      to: user.email,
+      subject: 'WashPro - Kode Reset Password',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+          <h2 style="color: #4f46e5; text-align: center;">WashPro - Kode Reset Password</h2>
+          <p>Halo <strong>${user.name}</strong>,</p>
+          <p>Gunakan kode OTP berikut untuk mengatur ulang kata sandi akun WashPro Anda:</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <span style="display: inline-block; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #0f172a; background: #f8fafc; padding: 16px 24px; border-radius: 10px;">${otpPlain}</span>
+          </div>
+          <p>Kode ini berlaku selama <strong>5 menit</strong>. Jangan bagikan kode ini kepada siapa pun.</p>
+          <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
+        </div>
+      `,
     });
 
-    res.json({ message: "Jika email terdaftar, kode OTP akan dikirim ke WhatsApp terdaftar." });
+    res.json({ message: "Jika email terdaftar, kode OTP akan dikirim ke email Anda." });
   } catch (error) {
     sendError(res, error, 500);
   }

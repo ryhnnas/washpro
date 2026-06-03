@@ -13,38 +13,38 @@
   --radius-3xl: 1.5rem;
 }
 
-@layer base {
-  body {
-    @apply bg-secondary text-primary antialiased selection:bg-tertiary/30 selection:text-primary;
-    margin: 0;
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  }
+body {
+  @apply bg-secondary text-primary antialiased selection:bg-tertiary/30 selection:text-primary;
+  margin: 0;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
-@layer utilities {
-  .glass-panel {
-    @apply bg-white border border-slate-200 shadow-xl;
-  }
-  
-  .glass-card {
-    @apply bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow;
-  }
-  
-  .premium-input {
-    @apply w-full p-4 bg-white border border-slate-300 rounded-2xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none text-primary transition-all duration-300 placeholder:text-slate-400 font-medium;
-  }
+@utility glass-panel {
+  @apply bg-white border border-slate-200 shadow-xl;
+}
 
-  .premium-button {
-    @apply py-4 px-6 bg-tertiary hover:bg-tertiary-hover text-primary font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all duration-300 shadow-lg shadow-tertiary/25 hover:shadow-tertiary/40 active:scale-[0.98];
-  }
+@utility glass-card {
+  @apply bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow;
+}
 
-  /* Hide scrollbar for Chrome, Safari and Opera */
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  /* Hide scrollbar for IE, Edge and Firefox */
-  .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-  }
+@utility premium-input {
+  @apply w-full p-4 bg-white border border-slate-300 rounded-2xl focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none text-primary transition-all duration-300 placeholder:text-slate-400 font-medium;
+}
+
+@utility premium-input-icon {
+  padding-left: 3.25rem !important;
+}
+
+@utility premium-button {
+  @apply py-4 px-6 bg-tertiary hover:bg-tertiary-hover text-primary font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all duration-300 shadow-lg shadow-tertiary/25 hover:shadow-tertiary/40 active:scale-[0.98];
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
 }

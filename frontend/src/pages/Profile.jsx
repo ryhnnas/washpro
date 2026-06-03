@@ -16,14 +16,25 @@ export default function Profile() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      return toast.error("Konfirmasi password tidak cocok");
+    if (formData.password) {
+      if (!formData.currentPassword) {
+        return toast.error("Password saat ini wajib diisi");
+      }
+      if (formData.password.length < 6) {
+        return toast.error("Password baru minimal 6 karakter");
+      }
+      if (formData.password !== formData.confirmPassword) {
+        return toast.error("Konfirmasi password tidak cocok");
+      }
     }
 
     setLoading(true);
     try {
       const payload = { name: formData.name };
-      if (formData.password) payload.password = formData.password;
+      if (formData.password) {
+        payload.password = formData.password;
+        payload.currentPassword = formData.currentPassword;
+      }
 
       const res = await api.put('/auth/profile', payload);
       
@@ -33,7 +44,7 @@ export default function Profile() {
       toast.success("Profil berhasil diperbarui");
       setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
     } catch (err) {
-      toast.error(err.response?.data?.error || "Gagal memperbarui profil");
+      toast.error(err.response?.data?.message || err.response?.data?.error || "Gagal memperbarui profil");
     }
     setLoading(false);
   };
@@ -61,7 +72,7 @@ export default function Profile() {
                   required 
                   type="text"
                   placeholder="Masukkan nama lengkap" 
-                  className="premium-input bg-secondary pl-11" 
+                  className="premium-input bg-secondary premium-input-icon" 
                   value={formData.name} 
                   onChange={e => setFormData({...formData, name: e.target.value})} 
                 />
@@ -76,6 +87,22 @@ export default function Profile() {
               <h2 className="text-xl font-bold">Keamanan</h2>
             </div>
             
+            <div className="grid grid-cols-1 gap-6 mb-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Password Saat Ini</label>
+                <div className="relative group">
+                  <input 
+                    type="password"
+                    placeholder="Wajib diisi jika ingin mengubah password" 
+                    className="premium-input bg-secondary premium-input-icon" 
+                    value={formData.currentPassword} 
+                    onChange={e => setFormData({...formData, currentPassword: e.target.value})} 
+                  />
+                  <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Password Baru</label>
@@ -83,7 +110,7 @@ export default function Profile() {
                   <input 
                     type="password"
                     placeholder="Minimal 6 karakter" 
-                    className="premium-input bg-secondary pl-11" 
+                    className="premium-input bg-secondary premium-input-icon" 
                     value={formData.password} 
                     onChange={e => setFormData({...formData, password: e.target.value})} 
                   />
@@ -91,12 +118,12 @@ export default function Profile() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">Konfirmasi Password</label>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Konfirmasi Password Baru</label>
                 <div className="relative group">
                   <input 
                     type="password"
-                    placeholder="Ulangi password" 
-                    className="premium-input bg-secondary pl-11" 
+                    placeholder="Ulangi password baru" 
+                    className="premium-input bg-secondary premium-input-icon" 
                     value={formData.confirmPassword} 
                     onChange={e => setFormData({...formData, confirmPassword: e.target.value})} 
                   />

@@ -392,9 +392,15 @@ export default function Reports() {
 
       {/* Table + Export */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
-          <input type="text" placeholder="Cari pelanggan..." className="w-full pl-11 py-3 border border-slate-200 rounded-2xl focus:border-primary outline-none" value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="relative w-full max-w-md group">
+          <input 
+            type="text" 
+            placeholder="Cari pelanggan..." 
+            className="premium-input bg-white premium-input-icon py-3 text-sm" 
+            value={search} 
+            onChange={e => setSearch(e.target.value)} 
+          />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">

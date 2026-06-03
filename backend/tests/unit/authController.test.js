@@ -9,6 +9,9 @@ jest.mock('../../src/config/prisma', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
     },
+    refreshToken: {
+      create: jest.fn(),
+    },
     business: {
       create: jest.fn(),
     },
@@ -30,8 +33,9 @@ describe('Auth Controller - Unit Tests', () => {
   let req, res;
 
   beforeEach(() => {
-    req = { body: {} };
+    req = { body: {}, headers: { 'user-agent': 'jest' } };
     res = {
+      cookie: jest.fn(),
       json: jest.fn(),
       status: jest.fn().mockReturnThis(),
     };

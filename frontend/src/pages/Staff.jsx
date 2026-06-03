@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, Search, Trash2, Edit2, Key, X, Check, Loader2 } from 'lucide-react';
+import { UserPlus, Search, Trash2, Edit2, Key, X, Check, Loader2, User, Mail } from 'lucide-react';
 import api from '../lib/axios';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -113,7 +113,7 @@ export default function Staff() {
           <input 
             type="text" 
             placeholder="Cari nama atau email staf..." 
-            className="premium-input pl-12 bg-white"
+            className="premium-input bg-white premium-input-icon"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -208,40 +208,46 @@ export default function Staff() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Nama Lengkap</label>
-                  <input 
-                    required
-                    type="text" 
-                    className="premium-input bg-secondary"
-                    placeholder="Contoh: Budi Santoso"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  />
+                  <div className="relative group">
+                    <input 
+                      required
+                      type="text" 
+                      className="premium-input bg-secondary premium-input-icon"
+                      placeholder="Contoh: Budi Santoso"
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    />
+                    <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Email / Username</label>
-                  <input 
-                    required
-                    type="email" 
-                    className="premium-input bg-secondary"
-                    placeholder="budi@washpro.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  />
+                  <div className="relative group">
+                    <input 
+                      required
+                      type="email" 
+                      className="premium-input bg-secondary premium-input-icon"
+                      placeholder="budi@washpro.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    />
+                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
                     {editingStaff ? 'Password Baru (Kosongkan jika tidak diubah)' : 'Password Awal'}
                   </label>
-                  <div className="relative">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <div className="relative group">
                     <input 
                       required={!editingStaff}
                       type="password" 
-                      className="premium-input bg-secondary pl-12"
+                      className="premium-input bg-secondary premium-input-icon"
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={(e) => setFormData({...formData, password: e.target.value})}
                     />
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" size={18} />
                   </div>
                 </div>
               </div>

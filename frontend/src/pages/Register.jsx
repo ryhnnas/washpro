@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
-import { Store, ArrowRight } from 'lucide-react';
+import { Store, ArrowRight, User, Mail, Lock } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function Register() {
@@ -45,47 +45,59 @@ export default function Register() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Nama Toko/Bisnis</label>
-              <input 
-                type="text" 
-                placeholder="Contoh: Rey Laundry" 
-                className="premium-input bg-slate-50"
-                onChange={e => setFormData({...formData, businessName: e.target.value})}
-                required
-              />
+              <div className="relative group">
+                <input 
+                  type="text" 
+                  placeholder="Contoh: Rey Laundry" 
+                  className="premium-input bg-slate-50 premium-input-icon"
+                  onChange={e => setFormData({...formData, businessName: e.target.value})}
+                  required
+                />
+                <Store size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+              </div>
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Nama Pemilik</label>
-              <input 
-                type="text" 
-                placeholder="CEO / Owner" 
-                className="premium-input bg-slate-50"
-                onChange={e => setFormData({...formData, ownerName: e.target.value})}
-                required
-              />
+              <div className="relative group">
+                <input 
+                  type="text" 
+                  placeholder="CEO / Owner" 
+                  className="premium-input bg-slate-50 premium-input-icon"
+                  onChange={e => setFormData({...formData, ownerName: e.target.value})}
+                  required
+                />
+                <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+              </div>
             </div>
           </div>
           
           <div>
             <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Pemilik Bisnis</label>
-            <input 
-              type="email" 
-              placeholder="owner@laundry.com" 
-              className="premium-input bg-slate-50"
-              onChange={e => setFormData({...formData, email: e.target.value})}
-              required
-            />
+            <div className="relative group">
+              <input 
+                type="email" 
+                placeholder="owner@laundry.com" 
+                className="premium-input bg-slate-50 premium-input-icon"
+                onChange={e => setFormData({...formData, email: e.target.value})}
+                required
+              />
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+            </div>
           </div>
           
           <div>
             <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Katasandi Pemilik</label>
-            <input 
-              type="password" 
-              placeholder="••••••••" 
-              className="premium-input bg-slate-50 select-all"
-              onChange={e => setFormData({...formData, password: e.target.value})}
-              required
-              minLength={6}
-            />
+            <div className="relative group">
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                className="premium-input bg-slate-50 premium-input-icon select-all"
+                onChange={e => setFormData({...formData, password: e.target.value})}
+                required
+                minLength={6}
+              />
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+            </div>
           </div>
 
           <button 

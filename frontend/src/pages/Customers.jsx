@@ -181,18 +181,16 @@ export default function Customers() {
                <option value="NONE">Tanpa Membership</option>
              </select>
            </div>
-           <div className="relative w-full sm:w-64">
-             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-               <Search size={18} className="text-slate-400"/>
-             </div>
-             <input
-               type="text"
-               placeholder="Cari nama atau HP..."
-               className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:border-primary outline-none text-primary transition-all text-sm font-medium shadow-sm"
-               value={search}
-               onChange={e => setSearch(e.target.value)}
-             />
-           </div>
+            <div className="relative w-full sm:w-64 group">
+              <input
+                type="text"
+                placeholder="Cari nama atau HP..."
+                className="premium-input bg-white premium-input-icon py-3 text-sm shadow-sm"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+            </div>
         </div>
       </div>
 

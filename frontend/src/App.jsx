@@ -3,9 +3,12 @@ import { isTokenValid } from './utils/tokenHelper';
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import { Toaster } from 'react-hot-toast';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import MainLayout from './layouts/MainLayout';
 import Paywall from './pages/Paywall';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
@@ -48,11 +51,14 @@ function App() {
       <AppProvider>
         <ErrorBoundary>
           <Router>
+            <Toaster position="top-center" reverseOrder={false} />
             <Routes>
               {/* Public */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
 
               {/* SuperAdmin Portal */}
               <Route path="/superadmin/login" element={<SuperAdminLogin />} />

@@ -29,6 +29,7 @@ export default function MainLayout() {
     { name: 'Tracking', path: '/tracking', icon: <Activity size={22} />, id: 'TRACKING' },
     { name: 'Pelanggan', path: '/customers', icon: <Users size={22} />, id: 'CUSTOMERS' },
     { name: 'Laporan', path: '/reports', icon: <FileText size={22} />, id: 'REPORTS' },
+    { name: 'Pengaturan Akun', path: '/profile', icon: <User size={22} />, id: 'PROFILE' },
   ];
 
   let allowedItems = navItems;
@@ -36,11 +37,11 @@ export default function MainLayout() {
     if (settings && settings.staffAllowedMenus) {
       try {
         const allowed = JSON.parse(settings.staffAllowedMenus);
-        // CASHIER & TRACKING wajib aktif untuk semua staf
-        allowedItems = navItems.filter(item => allowed.includes(item.id) || ['CASHIER', 'TRACKING'].includes(item.id));
+        // CASHIER, TRACKING, dan PROFILE wajib aktif untuk semua staf
+        allowedItems = navItems.filter(item => allowed.includes(item.id) || ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
       } catch(e) {}
     } else {
-      allowedItems = navItems.filter(item => ['CASHIER', 'TRACKING'].includes(item.id));
+      allowedItems = navItems.filter(item => ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
     }
   }
 

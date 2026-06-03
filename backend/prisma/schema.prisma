@@ -113,6 +113,9 @@ model User {
   password   String
   role       Role     @default(STAFF)
 
+  resetPasswordToken   String?   @unique @map("reset_password_token")
+  resetPasswordExpires DateTime? @map("reset_password_expires")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
