@@ -1,11 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
-const { getSettings, updateSettings, testWhatsapp, sendTestMessage } = require('../controllers/settingController');
+const protectedRoute = require('../middleware/protected');
+const { authorizeRole } = require('../middleware/auth');
+const validate = require('../middleware/validator');
+const { updateSettingSchema } = require('../schemas/settingSchema');
+const { getSettings, getPublicSettings, updateSettings } = require('../controllers/settingController');
 
-router.get('/', authMiddleware, getSettings);
-router.put('/', authMiddleware, updateSettings);
-router.get('/whatsapp/test', authMiddleware, testWhatsapp);
-router.post('/whatsapp/test-message', authMiddleware, sendTestMessage);
+// Public settings — accessible by all authenticated roles (OWNER & STAFF)
+router.get('/public', protectedRoute, getPublicSettings);
+
+// Full settings — OWNER only
+router.get('/', protectedRoute, authorizeRole('OWNER'), getSettings);
+router.put('/', protectedRoute, authorizeRole('OWNER'), validate(updateSettingSchema), updateSettings);
 
 module.exports = router;

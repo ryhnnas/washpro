@@ -1,11 +1,12 @@
 const prisma = require('../config/prisma');
 const membershipService = require('../services/membershipService');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
+const { sendError } = require('../utils/errorResponse');
 
 const getCustomers = async (req, res) => {
   try {
-    const { page = 1, limit = 50, search = '', membershipStatus } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const take = parseInt(limit);
+    const { skip, take, page, limit } = parsePagination(req.query);
+    const { search = '', membershipStatus } = req.query;
 
     let whereClause = { businessId: req.user.businessId };
 
@@ -14,6 +15,17 @@ const getCustomers = async (req, res) => {
         { name: { contains: search } },
         { phone: { contains: search } },
       ];
+    }
+
+    if (membershipStatus === 'ACTIVE') {
+      whereClause.memberships = {
+        some: {
+          status: 'ACTIVE',
+          endAt: { gte: new Date() }
+        }
+      };
+    } else if (membershipStatus === 'NONE') {
+      whereClause.memberships = { none: {} };
     }
 
     const [customers, totalCount] = await Promise.all([
@@ -54,6 +66,7 @@ const getCustomers = async (req, res) => {
       membership: c.memberships[0]
         ? {
             id: c.memberships[0].id,
+            templateId: c.memberships[0].templateId,
             status: c.memberships[0].status,
             startAt: c.memberships[0].startAt,
             endAt: c.memberships[0].endAt,
@@ -70,24 +83,12 @@ const getCustomers = async (req, res) => {
       createdAt: c.createdAt,
     }));
 
-    const filtered = membershipStatus
-      ? enriched.filter((c) => {
-          if (membershipStatus === 'ACTIVE') return c.membership?.isActive;
-          if (membershipStatus === 'NONE') return !c.membership;
-          return true;
-        })
-      : enriched;
-
     res.json({
-      data: filtered,
-      pagination: {
-        totalItems: totalCount,
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalCount / take),
-      },
+      data: enriched,
+      pagination: buildPaginationMeta(totalCount, page, limit),
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500, 'Gagal memuat daftar pelanggan');
   }
 };
 
@@ -117,16 +118,13 @@ const createCustomer = async (req, res) => {
       });
       res.status(201).json(fallback);
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      sendError(res, e, 500);
     }
   }
 };
 
 const createCustomerWithMembership = async (req, res) => {
-  if (req.user.role !== 'OWNER') {
-    return res.status(403).json({ message: 'Hanya OWNER yang dapat menambah membership customer' });
-  }
-  const { name, phone, address, startAt } = req.body;
+  const { name, phone, address, startAt, templateId } = req.body;
   if (!name) return res.status(400).json({ message: 'Nama customer wajib diisi' });
 
   try {
@@ -148,23 +146,18 @@ const createCustomerWithMembership = async (req, res) => {
           data: { businessId: req.user.businessId, name, phone: null, address },
         });
       }
-
-      const membership = await membershipService.activateCustomerMembership({
+      await membershipService.activateCustomerMembership({
         businessId: req.user.businessId,
         customerId: customer.id,
-        startAt: startAt ? new Date(startAt) : new Date(),
+        templateId,
+        startAt,
         tx,
       });
-
-      return { customer, membership };
+      return customer;
     });
-
-    res.status(201).json({
-      message: 'Customer baru dan membership berhasil dibuat',
-      ...result,
-    });
+    res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -178,33 +171,28 @@ const updateCustomer = async (req, res) => {
     });
     res.json(customer);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
 const activateMembership = async (req, res) => {
   const { id } = req.params;
-  const { startAt } = req.body;
-  if (req.user.role !== 'OWNER') {
-    return res.status(403).json({ message: 'Hanya OWNER yang dapat aktivasi membership' });
-  }
+  const { startAt, templateId } = req.body;
   try {
     const customer = await prisma.customer.findFirst({
       where: { id, businessId: req.user.businessId },
     });
-    if (!customer) return res.status(404).json({ message: 'Pelanggan tidak ditemukan' });
+    if (!customer) return res.status(404).json({ message: 'Customer tidak ditemukan' });
 
-    const membership = await prisma.$transaction((tx) =>
-      membershipService.activateCustomerMembership({
-        businessId: req.user.businessId,
-        customerId: id,
-        startAt: startAt ? new Date(startAt) : new Date(),
-        tx,
-      })
-    );
-    res.json({ message: 'Membership customer berhasil diaktivasi', membership });
+    await membershipService.activateCustomerMembership({
+      businessId: req.user.businessId,
+      customerId: id,
+      templateId,
+      startAt,
+    });
+    res.json({ message: 'Membership berhasil diaktifkan' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
@@ -230,12 +218,15 @@ const getMembershipUsage = async (req, res) => {
     if (!membership) return res.status(404).json({ error: 'Membership tidak ditemukan' });
     res.json(membership);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendError(res, error, 500);
   }
 };
 
 const deleteCustomer = async (req, res) => {
   const { id } = req.params;
+  if (req.user.role !== 'OWNER') {
+    return res.status(403).json({ message: 'Hanya OWNER yang dapat menghapus data pelanggan' });
+  }
   try {
     await prisma.customer.delete({
       where: { id, businessId: req.user.businessId },

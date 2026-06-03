@@ -1,12 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
-const { getTransactions, getOverdueTransactions, createTransaction, updateStatus, resendReceipt } = require('../controllers/transactionController');
+const protectedRoute = require('../middleware/protected');
+const validate = require('../middleware/validator');
+const { createTransactionSchema, updateStatusSchema } = require('../schemas/transactionSchema');
+const { 
+  getTransactions, 
+  getOverdueTransactions, 
+  createTransaction, 
+  updateStatus, 
+  resendReceipt, 
+  getExportData 
+} = require('../controllers/transactionController');
 
-router.get('/', authMiddleware, getTransactions);
-router.get('/overdue', authMiddleware, getOverdueTransactions);
-router.post('/', authMiddleware, createTransaction);
-router.patch('/:id/status', authMiddleware, updateStatus);
-router.post('/:id/resend-wa', authMiddleware, resendReceipt);
+const { authorizeRole } = require('../middleware/auth');
+
+router.get('/', protectedRoute, getTransactions);
+router.get('/export', protectedRoute, authorizeRole('OWNER'), getExportData);
+router.get('/overdue', protectedRoute, getOverdueTransactions);
+router.post('/', protectedRoute, validate(createTransactionSchema), createTransaction);
+router.patch('/:id/status', protectedRoute, validate(updateStatusSchema), updateStatus);
+router.post('/:id/resend-wa', protectedRoute, resendReceipt);
 
 module.exports = router;

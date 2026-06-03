@@ -1,5 +1,16 @@
 const prisma = require('../config/prisma');
 
+/**
+ * CATATAN PENTING — MEMBERSHIP COVERAGE CALCULATION
+ * 
+ * Logika calculateCoverage() di file ini adalah SOURCE OF TRUTH.
+ * Frontend (frontend/src/pages/Cashier.jsx) memiliki preview calculation
+ * yang harus SINKRON dengan logika di sini.
+ * 
+ * Jika ada perubahan di fungsi calculateCoverage(), update juga
+ * useEffect membershipPreview di Cashier.jsx.
+ */
+
 const isMembershipActive = (membership) => {
   if (!membership) return false;
   if (membership.status !== 'ACTIVE') return false;
@@ -98,18 +109,23 @@ const consumeQuotaAndLog = async ({
   });
 };
 
-const activateCustomerMembership = async ({ businessId, customerId, startAt = new Date(), tx = prisma }) => {
+const activateCustomerMembership = async ({ businessId, customerId, templateId, startAt = new Date(), tx = prisma }) => {
   const [setting, activeTemplate] = await Promise.all([
     tx.businessSetting.findUnique({ where: { businessId } }),
-    tx.membershipPackageTemplate.findFirst({
-      where: { businessId, isActive: true },
-      include: { quotaItems: true },
-      orderBy: { createdAt: 'desc' },
-    }),
+    templateId 
+      ? tx.membershipPackageTemplate.findUnique({ 
+          where: { id: templateId }, 
+          include: { quotaItems: true } 
+        })
+      : tx.membershipPackageTemplate.findFirst({
+          where: { businessId, isActive: true },
+          include: { quotaItems: true },
+          orderBy: { createdAt: 'desc' },
+        }),
   ]);
 
   if (!activeTemplate) {
-    throw new Error('Template paket membership belum dikonfigurasi.');
+    throw new Error('Template paket membership tidak ditemukan.');
   }
 
   const durationDays = setting?.membershipDurationDays || activeTemplate.durationDays || 30;

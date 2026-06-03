@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone } from 'lucide-react';
+import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/axios';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -36,19 +37,24 @@ const NEXT_STATUS = {
   DIAMBIL: null
 };
 
+const LIMIT = 30;
+
 export default function Tracking() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState('ALL');
-  const [toast, setToast] = useState(null); // { type, message }
-  const [resending, setResending] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [toast, setToast] = useState(null);
   const [overdueCount, setOverdueCount] = useState(0);
+  const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, id: null, currentStatus: null });
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (currentPage = page) => {
     setLoading(true);
     try {
-      const res = await api.get('/transactions?limit=100');
+      const res = await api.get(`/transactions?limit=${LIMIT}&page=${currentPage}`);
       setTransactions(res.data.data || []);
+      setTotalPages(res.data.pagination?.totalPages || 1);
       const overdueRes = await api.get('/transactions/overdue');
       setOverdueCount(overdueRes.data?.total || 0);
     } catch (err) {
@@ -58,8 +64,8 @@ export default function Tracking() {
   };
 
   useEffect(() => {
-    fetchTransactions();
-  }, []);
+    fetchTransactions(page);
+  }, [page]);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -69,6 +75,14 @@ export default function Tracking() {
   const handleUpdateStatus = async (id, currentStatus) => {
     const next = NEXT_STATUS[currentStatus];
     if (!next) return;
+    // Buka confirm dialog, eksekusi setelah konfirmasi
+    setConfirmDialog({ isOpen: true, id, currentStatus });
+  };
+
+  const handleConfirmStatusUpdate = async () => {
+    const { id, currentStatus } = confirmDialog;
+    const next = NEXT_STATUS[currentStatus];
+    setConfirmDialog({ isOpen: false, id: null, currentStatus: null });
     try {
       setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: next } : t));
       const res = await api.patch(`/transactions/${id}/status`, { status: next });
@@ -84,24 +98,10 @@ export default function Tracking() {
       }
     } catch (err) {
       showToast('error', 'Gagal update status');
-      fetchTransactions();
+      fetchTransactions(page);
     }
   };
 
-  const handleResend = async (id) => {
-    setResending(id);
-    try {
-      const res = await api.post(`/transactions/${id}/resend-wa`);
-      const wa = res.data?.whatsapp;
-      if (wa?.ok) showToast('success', 'Nota digital berhasil dikirim ulang ke pelanggan.');
-      else if (wa?.skipped) showToast('warning', `Tidak terkirim: ${wa.reason}`);
-      else showToast('error', wa?.error || 'Gagal mengirim WA');
-    } catch (e) {
-      showToast('error', 'Gagal mengirim ulang WA');
-    } finally {
-      setResending(null);
-    }
-  };
 
   const filtered = filter === 'ALL'
     ? transactions
@@ -134,7 +134,7 @@ export default function Tracking() {
            )}
         </div>
         <button 
-          onClick={fetchTransactions}
+          onClick={() => fetchTransactions(page)}
           className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 shadow-sm text-primary rounded-xl hover:bg-slate-50 transition-all active:scale-95"
         >
           <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
@@ -237,20 +237,44 @@ export default function Tracking() {
                    </div>
                 )}
 
-                {t.customerPhone && (
-                  <button
-                    onClick={() => handleResend(t.id)}
-                    disabled={resending === t.id}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 transition-colors text-sm disabled:opacity-50"
-                  >
-                    <MessageCircle size={14}/> {resending === t.id ? 'Mengirim...' : 'Kirim Ulang Nota WA'}
-                  </button>
-                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            disabled={page <= 1 || loading}
+            onClick={() => setPage(p => p - 1)}
+            className="p-2 rounded-xl border border-slate-200 bg-white text-primary hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <span className="text-sm font-bold text-slate-500 min-w-[100px] text-center">
+            Halaman {page} dari {totalPages}
+          </span>
+          <button
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage(p => p + 1)}
+            className="p-2 rounded-xl border border-slate-200 bg-white text-primary hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title="Perbarui Status Pesanan"
+        message={`Pindahkan pesanan ini ke status "${NEXT_STATUS[confirmDialog.currentStatus]}"? Notifikasi WhatsApp akan dikirim ke pelanggan jika diaktifkan.`}
+        confirmLabel="Ya, Pindahkan"
+        confirmVariant="primary"
+        onConfirm={handleConfirmStatusUpdate}
+        onCancel={() => setConfirmDialog({ isOpen: false, id: null, currentStatus: null })}
+      />
     </div>
   );
 }

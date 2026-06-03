@@ -1,25 +1,33 @@
 import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
-import { LogIn, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ArrowRight } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('OWNER');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
     try {
-      const data = await authService.login(email, password, role);
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/dashboard');
+      const data = await authService.login(email, password);
+      // Gunakan AuthContext login — sync ke localStorage + state sekaligus
+      login(data.token, data.user);
+      // Redirect berdasarkan role: STAFF ke kasir, OWNER ke dashboard
+      if (data.user.role === 'STAFF') {
+        navigate('/cashier');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
-      alert(err.response?.data?.message || "Login gagal");
+      setError(err.response?.data?.message || 'Login gagal. Periksa email dan password Anda.');
     } finally {
       setLoading(false);
     }
@@ -32,35 +40,21 @@ export default function Login() {
       <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
 
       <div className="w-full max-w-[420px] bg-white border border-slate-200 shadow-2xl p-8 md:p-10 rounded-3xl z-10 relative">
-        <div className="mb-10 text-center">
-          <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-[#254b85] items-center justify-center text-white mb-6 shadow-lg shadow-primary/30">
-            <LogIn size={32} />
-          </div>
+        <div className="mb-8 text-center flex flex-col items-center">
+          <img src="/logo.png" alt="WashPro Logo" className="w-20 h-auto object-contain mb-4" />
           <h2 className="text-3xl font-black text-primary mb-2 tracking-tight">Selamat Datang</h2>
           <p className="text-slate-500 font-medium text-sm">Masuk ke sistem WashPro Web POS</p>
         </div>
 
-        {/* Role Toggle */}
-        <div className="flex bg-slate-100 p-1 rounded-2xl mb-8 relative z-20">
-          <button 
-            type="button"
-            onClick={() => setRole('OWNER')}
-            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${role === 'OWNER' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Masuk Pemilik
-          </button>
-          <button 
-            type="button"
-            onClick={() => setRole('STAFF')}
-            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${role === 'STAFF' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            Masuk Staf
-          </button>
-        </div>
-        
+        {error && (
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm font-medium">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email {role === 'OWNER' ? 'Pemilik Bisnis' : 'Staf Laundry'}</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
             <input 
               type="email" 
               placeholder="nama@email.com" 
@@ -89,7 +83,7 @@ export default function Login() {
           >
             {loading ? "Memproses..." : (
               <>
-                Mendekripsi <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                Masuk <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
               </>
             )}
           </button>

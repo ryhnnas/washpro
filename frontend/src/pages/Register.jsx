@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
 import { Store, ArrowRight } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -18,10 +19,10 @@ export default function Register() {
     setLoading(true);
     try {
       await authService.register(formData);
-      alert("Bisnis berhasil didaftarkan! Silakan Login.");
-      navigate('/login');
+      toast.success('Bisnis berhasil didaftarkan! Silakan login.');
+      setTimeout(() => navigate('/login'), 1200);
     } catch (err) {
-      alert(err.response?.data?.error || "Gagal daftar");
+      toast.error(err.response?.data?.error || 'Gagal mendaftar. Periksa kembali data Anda.');
     } finally {
       setLoading(false);
     }
@@ -34,10 +35,8 @@ export default function Register() {
       <div className="absolute bottom-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
 
       <div className="w-full max-w-[500px] bg-white border border-slate-200 shadow-2xl p-8 md:p-10 rounded-3xl z-10 relative">
-        <div className="mb-10 text-center">
-          <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-tertiary to-[#d4b300] items-center justify-center text-primary mb-6 shadow-lg shadow-tertiary/30">
-            <Store size={32} />
-          </div>
+        <div className="mb-8 text-center flex flex-col items-center">
+          <img src="/logo.png" alt="WashPro Logo" className="w-20 h-auto object-contain mb-4" />
           <h2 className="text-3xl font-black text-primary mb-2 tracking-tight">Buka Toko Laundry</h2>
           <p className="text-slate-500 font-medium text-sm">Daftarkan SaaS bisnis Anda ke dalam WashPro</p>
         </div>
@@ -111,6 +110,7 @@ export default function Register() {
           </div>
         </div>
       </div>
+      <Toaster position="bottom-right" />
     </div>
   );
 }

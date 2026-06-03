@@ -13,9 +13,7 @@ export default function LandingPage() {
           <div className="flex justify-between items-center h-20">
             {/* Logo */}
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-primary-light flex items-center justify-center text-white shadow-md shadow-primary/20">
-                <ShieldCheck size={24} />
-              </div>
+              <img src="/logo.png" alt="WashPro Logo" className="w-10 h-10 object-contain" />
               <span className="text-2xl font-black tracking-tight text-primary">Wash<span className="text-tertiary">Pro</span></span>
             </div>
 
@@ -145,7 +143,7 @@ export default function LandingPage() {
         <div className="absolute top-[-50%] right-[-10%] w-[50vw] h-[50vw] bg-tertiary/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="max-w-4xl mx-auto text-center px-4 relative z-10">
           <h2 className="text-4xl md:text-5xl font-black mb-6">Siap Mengubah Skala Bisnis Anda?</h2>
-          <p className="text-primary-light text-lg mb-10 max-w-xl mx-auto">
+          <p className="text-primary-black text-lg mb-10 max-w-xl mx-auto">
             Bergabunglah dengan pengusaha laundry lainnya menggunakan software POS paling modern yang ada saat ini.
           </p>
           <Link 
@@ -155,8 +153,8 @@ export default function LandingPage() {
             Daftar Sekarang Secara Gratis
           </Link>
           
-          <div className="mt-20 pt-8 border-t border-primary-light text-center text-primary-light text-sm font-medium">
-            &copy; {new Date().getFullYear()} WashPro SaaS. All rights reserved.
+          <div className="mt-20 pt-8 border-t border-primary-light text-center text-primary-black text-sm font-medium">
+            &copy; {new Date().getFullYear()} WashPro. All rights reserved.
           </div>
         </div>
       </footer>

@@ -25,3 +25,13 @@ yarn-error.log*
 .DS_Store
 dist/
 build/
+
+# Uploaded payment proofs and other tenant uploads
+backend/uploads/
+
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+e2e/.auth/

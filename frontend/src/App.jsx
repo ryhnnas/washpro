@@ -1,10 +1,18 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { isTokenValid } from './utils/tokenHelper';
+import { AuthProvider } from './context/AuthContext';
+import { AppProvider } from './context/AppContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import MainLayout from './layouts/MainLayout';
+import Paywall from './pages/Paywall';
+import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
+import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
+import NotFound from './pages/NotFound';
 
-// Halaman-halaman
+// Halaman-halaman Tenant
 import Dashboard from './pages/Dashboard';
 import Cashier from './pages/Cashier';
 import Tracking from './pages/Tracking';
@@ -12,39 +20,69 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Services from './pages/Services';
 import Customers from './pages/Customers';
+import Staff from './pages/Staff';
+import Profile from './pages/Profile';
+import SubscriptionInfo from './pages/SubscriptionInfo';
 
-// Komponen Pembatas
+// Guard: Tenant harus login (validates JWT expiry)
 const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" />;
+  if (!isTokenValid(token)) {
+    localStorage.removeItem('token');
+    return <Navigate to="/login" />;
+  }
   return children;
 };
 
-// Placeholder untuk sementara jika file belum dibuat utuh
-const PlaceholderPage = ({ title }) => (
-  <div className="p-8 text-white"><h1 className="text-2xl font-bold">{title}</h1><p>Sedang dibangun...</p></div>
-);
+// Guard: SuperAdmin harus login
+const SuperAdminRoute = ({ children }) => {
+  const token = localStorage.getItem('superadmin_token');
+  if (!token) return <Navigate to="/superadmin/login" />;
+  return children;
+};
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        
-        {/* Dashboard dan lain-lain di dalam MainLayout */}
-        <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/cashier" element={<Cashier />} />
-          <Route path="customers" element={<Customers />} />
-          <Route path="/tracking" element={<Tracking />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="services" element={<Services />} />
-        </Route>
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <AppProvider>
+        <ErrorBoundary>
+          <Router>
+            <Routes>
+              {/* Public */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+
+              {/* SuperAdmin Portal */}
+              <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+              <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+              <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" />} />
+
+              {/* Paywall (butuh login tenant, tapi di luar MainLayout agar tidak ada sidebar) */}
+              <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+
+              {/* Dashboard POS di dalam MainLayout */}
+              <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/cashier" element={<Cashier />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/tracking" element={<Tracking />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/services" element={<Services />} />
+                <Route path="/staff" element={<Staff />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/subscription" element={<SubscriptionInfo />} />
+              </Route>
+
+              {/* 404 — catch-all */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Router>
+        </ErrorBoundary>
+      </AppProvider>
+    </AuthProvider>
   );
 }
 

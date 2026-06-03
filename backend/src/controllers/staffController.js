@@ -14,6 +14,7 @@ const getStaff = async (req, res) => {
         id: true,
         name: true,
         email: true,
+        phone: true,
         createdAt: true
       }
     });
@@ -25,7 +26,7 @@ const getStaff = async (req, res) => {
 
 // Buat akun staff baru (hanya bisa diakses owner)
 const createStaff = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, phone } = req.body;
   try {
     // Validasi apakah hanya OWNER yang bisa create
     if (req.user.role !== 'OWNER') {
@@ -47,10 +48,11 @@ const createStaff = async (req, res) => {
         name,
         email,
         password: hashedPassword,
+        phone: phone || null,
         role: 'STAFF',
         businessId: businessId
       },
-      select: { id: true, name: true, email: true, createdAt: true }
+      select: { id: true, name: true, email: true, phone: true, createdAt: true }
     });
 
     res.status(201).json({ message: "Staf berhasil ditambahkan", data: newStaff });
@@ -89,4 +91,49 @@ const deleteStaff = async (req, res) => {
   }
 };
 
-module.exports = { getStaff, createStaff, deleteStaff };
+// Update staff (Hanya bisa diakses owner)
+const updateStaff = async (req, res) => {
+  const { id } = req.params;
+  const { name, email, password, phone } = req.body;
+  try {
+    // Validasi OWNER
+    if (req.user.role !== 'OWNER') {
+      return res.status(403).json({ message: "Akses ditolak. Bukan pemilik." });
+    }
+
+    const businessId = req.user.businessId;
+
+    // Pastikan staff yg mau diupdate ada di bisnis yg sama
+    const staff = await prisma.user.findFirst({
+      where: { id: id, businessId: businessId, role: 'STAFF' }
+    });
+
+    if (!staff) {
+      return res.status(404).json({ message: "Staf tidak ditemukan." });
+    }
+
+    const updateData = { name, email };
+    
+    // Jika password diisi, hash password baru
+    if (password && password.trim() !== "") {
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    // Update phone (bisa di-set atau di-clear)
+    if (phone !== undefined) {
+      updateData.phone = phone || null;
+    }
+
+    const updatedStaff = await prisma.user.update({
+      where: { id: id },
+      data: updateData,
+      select: { id: true, name: true, email: true, phone: true, updatedAt: true }
+    });
+
+    res.json({ message: "Staf berhasil diperbarui", data: updatedStaff });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { getStaff, createStaff, deleteStaff, updateStaff };
