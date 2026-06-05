@@ -10,6 +10,63 @@ const { sendError } = require('../utils/errorResponse');
 const ACCESS_TOKEN_EXPIRY = '15m';   // Short-lived access token
 const REFRESH_TOKEN_EXPIRY_DAYS = 7; // Long-lived refresh token
 
+const EMAIL_OTP_EXPIRY_MS = 10 * 60 * 1000;
+const EMAIL_OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const EMAIL_OTP_MAX_PER_HOUR = 5;
+
+const sendEmailVerificationOtp = async ({ userId, email, name }) => {
+  const now = new Date();
+
+  const recent = await prisma.emailVerificationOtp.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (recent && now - new Date(recent.createdAt) < EMAIL_OTP_RESEND_COOLDOWN_MS) {
+    const seconds = Math.ceil((EMAIL_OTP_RESEND_COOLDOWN_MS - (now - new Date(recent.createdAt))) / 1000);
+    return { ok: false, code: 'COOLDOWN', retryAfterSeconds: seconds };
+  }
+
+  const windowStart = new Date(Date.now() - 60 * 60 * 1000);
+  const sentCount = await prisma.emailVerificationOtp.count({
+    where: { userId, createdAt: { gte: windowStart } },
+  });
+
+  if (sentCount >= EMAIL_OTP_MAX_PER_HOUR) {
+    return { ok: false, code: 'RATE_LIMIT' };
+  }
+
+  const otpPlain = crypto.randomInt(100000, 999999).toString();
+  const otpHashed = await bcrypt.hash(otpPlain, 10);
+  const expiresAt = new Date(Date.now() + EMAIL_OTP_EXPIRY_MS);
+
+  await prisma.emailVerificationOtp.create({
+    data: {
+      userId,
+      otp: otpHashed,
+      expiresAt,
+    },
+  });
+
+  await emailService.sendEmail({
+    to: email,
+    subject: 'WashPro - Kode Verifikasi Email',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <h2 style="color: #4f46e5; text-align: center;">WashPro - Verifikasi Email</h2>
+        <p>Halo <strong>${name || 'Pengguna'}</strong>,</p>
+        <p>Gunakan kode OTP berikut untuk memverifikasi email Anda:</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <span style="display: inline-block; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #0f172a; background: #f8fafc; padding: 16px 24px; border-radius: 10px;">${otpPlain}</span>
+        </div>
+        <p>Kode ini berlaku selama <strong>10 menit</strong>. Jangan bagikan kode ini kepada siapa pun.</p>
+      </div>
+    `,
+  });
+
+  return { ok: true };
+};
+
 /**
  * Helper: Generate refresh token, hash it, store in DB.
  */
@@ -73,6 +130,7 @@ const registerOwner = async (req, res) => {
       const business = await tx.business.create({
         data: {
           name: businessName,
+          phone,
           subscriptionStatus: 'TRIAL',
           trialEndAt,
         },
@@ -82,8 +140,9 @@ const registerOwner = async (req, res) => {
           name: ownerName,
           email,
           password: hashedPassword,
-          phone: phone || null,
+          phone,
           role: 'OWNER',
+          isEmailVerified: false,
           businessId: business.id
         }
       });
@@ -125,10 +184,23 @@ const registerOwner = async (req, res) => {
     
     const userWithoutPassword = { ...result.user };
     delete userWithoutPassword.password;
-    
-    res.status(201).json({ message: "Registrasi Berhasil", data: { business: result.business, user: userWithoutPassword } });
+
+    sendEmailVerificationOtp({ userId: result.user.id, email: result.user.email, name: result.user.name }).catch(() => {});
+
+    res.status(201).json({
+      message: "Registrasi berhasil. Kode OTP verifikasi email telah dikirim.",
+      requiresEmailVerification: true,
+      email: result.user.email,
+      data: { business: result.business, user: userWithoutPassword }
+    });
   } catch (error) {
-    res.status(400).json({ error: "Email sudah terdaftar atau data tidak valid" });
+    if (error?.code === 'P2002') {
+      return res.status(400).json({ message: "Email sudah terdaftar" });
+    }
+    if (error?.code === 'P2022') {
+      return res.status(500).json({ message: "Database belum termigrasi. Jalankan prisma migrate terlebih dahulu." });
+    }
+    sendError(res, error, 500);
   }
 };
 
@@ -141,6 +213,26 @@ const login = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ message: "Password salah" });
+
+    const business = await prisma.business.findUnique({
+      where: { id: user.businessId },
+      select: { subscriptionStatus: true, deletedAt: true },
+    });
+
+    if (business?.deletedAt) {
+      return res.status(403).json({ message: "Akun Anda ditangguhkan. Mohon chat admin.", code: 'BUSINESS_DELETED' });
+    }
+    if (business?.subscriptionStatus === 'SUSPENDED') {
+      return res.status(403).json({ message: "Akun Anda ditangguhkan. Mohon chat admin.", code: 'BUSINESS_SUSPENDED' });
+    }
+
+    if (user.role === 'OWNER' && !user.isEmailVerified) {
+      return res.status(403).json({
+        message: "Email Anda belum diverifikasi. Silakan verifikasi OTP terlebih dahulu.",
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email,
+      });
+    }
 
     // Generate short-lived access token
     const accessToken = jwt.sign(
@@ -159,7 +251,15 @@ const login = async (req, res) => {
     res.json({
       message: "Login Berhasil",
       token: accessToken, // Backward compat untuk mobile/API client
-      user: { id: user.id, name: user.name, role: user.role, businessId: user.businessId }
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        businessId: user.businessId,
+        phone: user.phone,
+        isEmailVerified: user.isEmailVerified,
+        mustChangePassword: user.mustChangePassword,
+      }
     });
   } catch (error) {
     sendError(res, error, 500);
@@ -168,27 +268,50 @@ const login = async (req, res) => {
 
 // UPDATE PROFILE
 const updateProfile = async (req, res) => {
-  const { name, password, phone } = req.body;
+  const { name, password, currentPassword, phone } = req.body;
   const userId = req.user.id;
 
   try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+
     const data = {};
     if (name) data.name = name;
     if (password) {
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) return res.status(401).json({ message: "Password saat ini salah" });
       data.password = await bcrypt.hash(password, 10);
     }
     if (phone !== undefined) {
       data.phone = phone || null;
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data,
-    });
+    const [updatedUser] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data,
+      }),
+      ...(phone !== undefined && user.role === 'OWNER'
+        ? [
+            prisma.business.update({
+              where: { id: user.businessId },
+              data: { phone: phone || null },
+            }),
+          ]
+        : []),
+    ]);
 
     res.json({
       message: "Profil berhasil diperbarui",
-      user: { id: updatedUser.id, name: updatedUser.name, phone: updatedUser.phone, role: updatedUser.role, businessId: updatedUser.businessId }
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        phone: updatedUser.phone,
+        role: updatedUser.role,
+        businessId: updatedUser.businessId,
+        isEmailVerified: updatedUser.isEmailVerified,
+        mustChangePassword: updatedUser.mustChangePassword,
+      }
     });
   } catch (error) {
     sendError(res, error, 500);
@@ -210,7 +333,7 @@ const changePassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, mustChangePassword: false },
     });
 
     res.json({ message: "Password berhasil diubah" });
@@ -428,11 +551,111 @@ const refreshAccessToken = async (req, res) => {
     res.json({
       message: 'Token berhasil diperbarui',
       token: accessToken, // Backward compat
-      user: { id: user.id, name: user.name, role: user.role, businessId: user.businessId },
+      user: {
+        id: user.id,
+        name: user.name,
+        role: user.role,
+        businessId: user.businessId,
+        phone: user.phone,
+        isEmailVerified: user.isEmailVerified,
+        mustChangePassword: user.mustChangePassword,
+      },
     });
   } catch (error) {
     sendError(res, error, 500);
   }
 };
 
-module.exports = { registerOwner, login, updateProfile, changePassword, forgotPassword, verifyOtp, resetPassword, refreshAccessToken };
+const verifyEmailOtp = async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(400).json({ message: "Kode OTP tidak valid atau sudah kedaluwarsa." });
+
+    if (user.isEmailVerified) {
+      return res.json({ message: "Email sudah terverifikasi. Silakan login." });
+    }
+
+    const otpRecord = await prisma.emailVerificationOtp.findFirst({
+      where: {
+        userId: user.id,
+        usedAt: null,
+        attempts: { lt: 5 },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ message: "Kode OTP tidak valid atau sudah kedaluwarsa." });
+    }
+
+    const isValid = await bcrypt.compare(otp, otpRecord.otp);
+    if (!isValid) {
+      await prisma.emailVerificationOtp.update({
+        where: { id: otpRecord.id },
+        data: { attempts: otpRecord.attempts + 1 },
+      });
+
+      const remaining = 4 - otpRecord.attempts;
+      return res.status(400).json({
+        message: `Kode OTP salah. ${remaining > 0 ? `Sisa percobaan: ${remaining}` : 'OTP telah hangus, silakan kirim ulang.'}`,
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { isEmailVerified: true, mustChangePassword: user.role === 'STAFF' ? user.mustChangePassword : false },
+      }),
+      prisma.emailVerificationOtp.update({
+        where: { id: otpRecord.id },
+        data: { usedAt: new Date() },
+      }),
+      prisma.emailVerificationOtp.updateMany({
+        where: { userId: user.id, usedAt: null, id: { not: otpRecord.id } },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    res.json({ message: "Verifikasi email berhasil. Silakan login." });
+  } catch (error) {
+    sendError(res, error, 500);
+  }
+};
+
+const resendEmailOtp = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.json({ message: "Jika email terdaftar, OTP verifikasi akan dikirim." });
+    if (user.isEmailVerified) return res.json({ message: "Email sudah terverifikasi. Silakan login." });
+
+    const result = await sendEmailVerificationOtp({ userId: user.id, email: user.email, name: user.name });
+    if (!result.ok && result.code === 'COOLDOWN') {
+      return res.status(429).json({ message: `Terlalu cepat. Coba lagi dalam ${result.retryAfterSeconds} detik.`, retryAfterSeconds: result.retryAfterSeconds });
+    }
+    if (!result.ok && result.code === 'RATE_LIMIT') {
+      return res.status(429).json({ message: "Terlalu banyak permintaan OTP. Silakan coba lagi nanti." });
+    }
+
+    res.json({ message: "OTP verifikasi email telah dikirim." });
+  } catch (error) {
+    sendError(res, error, 500);
+  }
+};
+
+module.exports = {
+  registerOwner,
+  login,
+  updateProfile,
+  changePassword,
+  forgotPassword,
+  verifyOtp,
+  resetPassword,
+  refreshAccessToken,
+  verifyEmailOtp,
+  resendEmailOtp,
+};

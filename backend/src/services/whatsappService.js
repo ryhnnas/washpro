@@ -29,9 +29,36 @@ const getGatewayHeaders = (businessId) => {
   return headers;
 };
 
+const ensureBusinessForWhatsApp = async (businessId) => {
+  if (!businessId) return null;
+
+  const existing = await prisma.business.findUnique({ where: { id: businessId } }).catch(() => null);
+  if (existing) return existing;
+
+  if (businessId !== 'SUPERADMIN') return null;
+
+  try {
+    return await prisma.business.create({
+      data: {
+        id: 'SUPERADMIN',
+        name: 'WashPro System',
+        subscriptionStatus: 'SUSPENDED',
+        deletedAt: new Date(),
+      },
+    });
+  } catch (err) {
+    const retry = await prisma.business.findUnique({ where: { id: businessId } }).catch(() => null);
+    if (retry) return retry;
+    throw err;
+  }
+};
+
 // 1. Session Management
 const checkConnectionStatus = async (businessId) => {
   try {
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (!business) throw new Error('Bisnis tidak ditemukan');
+
     const res = await fetch(`${getGatewayUrl()}/devices/${businessId}/status`, {
       headers: getGatewayHeaders(businessId),
       signal: AbortSignal.timeout(60000),
@@ -53,19 +80,21 @@ const checkConnectionStatus = async (businessId) => {
 
     return { status: isConnected ? 'connected' : 'disconnected', detail: data.results || data.data };
   } catch (err) {
-    await prisma.whatsAppSession.upsert({
-      where: { businessId },
-      create: { businessId, status: 'error', lastError: err.message },
-      update: { status: 'error', lastError: err.message },
-    }).catch(() => { });
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (business) {
+      await prisma.whatsAppSession.upsert({
+        where: { businessId },
+        create: { businessId, status: 'error', lastError: err.message },
+        update: { status: 'error', lastError: err.message },
+      }).catch(() => { });
+    }
     return { status: 'error', detail: err.message };
   }
 };
 
 const updateSession = async (businessId, data) => {
   try {
-    // Verify business exists to prevent FK constraint violation
-    const business = await prisma.business.findUnique({ where: { id: businessId } });
+    const business = await ensureBusinessForWhatsApp(businessId);
     if (!business) {
       console.warn(`WhatsApp updateSession: businessId ${businessId} not found, skipping.`);
       return null;
@@ -121,6 +150,9 @@ const ensureDevice = async (businessId) => {
 
 const loginWithQR = async (businessId, retry = 0) => {
   try {
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (!business) throw new Error('Bisnis tidak ditemukan');
+
     // Step 1: Register device
     await ensureDevice(businessId);
 
@@ -151,16 +183,23 @@ const loginWithQR = async (businessId, retry = 0) => {
       return loginWithQR(businessId, retry + 1);
     }
     console.error('[WA] loginWithQR error:', err.message);
-    await prisma.whatsAppSession.update({
-      where: { businessId },
-      data: { status: 'error', lastError: err.message },
-    }).catch(() => { });
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (business) {
+      await prisma.whatsAppSession.upsert({
+        where: { businessId },
+        create: { businessId, status: 'error', lastError: err.message },
+        update: { status: 'error', lastError: err.message },
+      }).catch(() => { });
+    }
     return { ok: false, error: err.message };
   }
 };
 
 const loginWithCode = async (businessId, phoneNumber) => {
   try {
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (!business) throw new Error('Bisnis tidak ditemukan');
+
     const target = normalizePhone(phoneNumber);
     if (!target) throw new Error('Format nomor HP tidak valid');
 
@@ -186,25 +225,33 @@ const loginWithCode = async (businessId, phoneNumber) => {
     return { ok: true, code: data.results?.pair_code || data.results };
   } catch (err) {
     console.error('[WA] loginWithCode error:', err.message);
-    await prisma.whatsAppSession.update({
-      where: { businessId },
-      data: { status: 'error', lastError: err.message },
-    }).catch(() => { });
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (business) {
+      await prisma.whatsAppSession.upsert({
+        where: { businessId },
+        create: { businessId, status: 'error', lastError: err.message },
+        update: { status: 'error', lastError: err.message },
+      }).catch(() => { });
+    }
     return { ok: false, error: err.message };
   }
 };
 
 const logoutDevice = async (businessId) => {
   try {
+    const business = await ensureBusinessForWhatsApp(businessId);
+    if (!business) throw new Error('Bisnis tidak ditemukan');
+
     // Gunakan endpoint RESTful untuk logout di v8
     await fetch(`${getGatewayUrl()}/devices/${businessId}/logout`, {
       method: 'POST',
       headers: getGatewayHeaders(businessId),
     });
-    await prisma.whatsAppSession.update({
+    await prisma.whatsAppSession.upsert({
       where: { businessId },
-      data: { status: 'disconnected' },
-    });
+      create: { businessId, status: 'disconnected' },
+      update: { status: 'disconnected' },
+    }).catch(() => { });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };

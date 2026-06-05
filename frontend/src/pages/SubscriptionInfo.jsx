@@ -177,7 +177,7 @@ export default function SubscriptionInfo() {
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">WhatsApp Notifikasi</p>
                   <p className="text-sm font-black text-primary truncate">{status?.businessPhone || 'Belum diatur'}</p>
-                  <p className="text-[11px] text-slate-400">Dapat diperbarui saat upload bukti</p>
+                  <p className="text-[11px] text-slate-400">Dapat diperbarui dari halaman Pengaturan Akun</p>
                 </div>
               </div>
 

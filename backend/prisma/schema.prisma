@@ -56,21 +56,25 @@ model SubscriptionPayment {
   id              String        @id @default(uuid())
   businessId      String        @map("business_id")
   planId          String        @map("plan_id")
+  uploadedByUserId String?      @map("uploaded_by_user_id")
   amount          Int
   proofOfPayment  String        @db.Text @map("proof_of_payment")
   status          PaymentStatus @default(PENDING)
   paymentMethod   String        @default("QRIS_DANA") @map("payment_method")
   approvedAt      DateTime?     @map("approved_at")
   approvedById    String?       @map("approved_by_id")
+  adminEmailNotifiedAt DateTime? @map("admin_email_notified_at")
   rejectionReason String?       @db.Text @map("rejection_reason")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   plan     SubscriptionPlan @relation(fields: [planId], references: [id])
+  uploadedBy User?          @relation("UserUploadedPayments", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   @@index([businessId, status])
   @@index([status])
+  @@index([uploadedByUserId])
 }
 
 // =============================================
@@ -112,6 +116,8 @@ model User {
   phone      String?
   password   String
   role       Role     @default(STAFF)
+  isEmailVerified Boolean @default(false) @map("is_email_verified")
+  mustChangePassword Boolean @default(false) @map("must_change_password")
 
   resetPasswordToken   String?   @unique @map("reset_password_token")
   resetPasswordExpires DateTime? @map("reset_password_expires")
@@ -123,8 +129,24 @@ model User {
   transactions      Transaction[]
   passwordResetOtps PasswordResetOtp[]
   refreshTokens     RefreshToken[]
+  emailVerificationOtps EmailVerificationOtp[]
+  uploadedPayments SubscriptionPayment[] @relation("UserUploadedPayments")
 
   @@index([businessId])
+}
+
+model EmailVerificationOtp {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  otp       String
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 enum Role {

@@ -15,7 +15,10 @@ export default function MainLayout() {
   const { settings } = useApp();
 
   useEffect(() => {
-    setSidebarOpen(false);
+    const t = setTimeout(() => {
+      setSidebarOpen(false);
+    }, 0);
+    return () => clearTimeout(t);
   }, [location.pathname]);
 
   const handleLogout = () => {
@@ -39,7 +42,7 @@ export default function MainLayout() {
         const allowed = JSON.parse(settings.staffAllowedMenus);
         // CASHIER, TRACKING, dan PROFILE wajib aktif untuk semua staf
         allowedItems = navItems.filter(item => allowed.includes(item.id) || ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
-      } catch(e) {}
+      } catch { void 0; }
     } else {
       allowedItems = navItems.filter(item => ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
     }
@@ -171,7 +174,7 @@ export default function MainLayout() {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-10 relative">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 lg:p-10 pb-24 relative">
           <div className="absolute inset-0 bg-[radial-gradient(#1A365D10_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none"></div>
           <div className="relative z-10 max-w-7xl mx-auto h-full">
             <Outlet />

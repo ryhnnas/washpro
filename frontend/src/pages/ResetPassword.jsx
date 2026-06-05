@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Mail, KeyRound, Lock, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PasswordInput from '../components/PasswordInput';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -19,11 +20,6 @@ export default function ResetPassword() {
 
     if (otp.length !== 6) {
       toast.error('OTP harus 6 digit.');
-      return;
-    }
-
-    if (password.length < 6) {
-      toast.error('Kata sandi minimal harus 6 karakter.');
       return;
     }
 
@@ -93,18 +89,7 @@ export default function ResetPassword() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Kata Sandi Baru</label>
-              <div className="relative group">
-                <input
-                  type="password"
-                  placeholder="Minimal 6 karakter"
-                  className="premium-input bg-slate-50 premium-input-icon"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-                <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
-              </div>
+              <PasswordInput label="Kata Sandi Baru" value={password} onChange={setPassword} required />
             </div>
 
             <div>

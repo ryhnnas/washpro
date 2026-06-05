@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
-const { registerOwner, login, updateProfile, changePassword, forgotPassword, verifyOtp, resetPassword, refreshAccessToken } = require('../controllers/authController');
+const { registerOwner, login, updateProfile, changePassword, forgotPassword, verifyOtp, resetPassword, refreshAccessToken, verifyEmailOtp, resendEmailOtp } = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
 const validate = require('../middleware/validator');
-const { registerSchema, loginSchema, updateProfileSchema, changePasswordSchema, forgotPasswordSchema, verifyOtpSchema, resetPasswordSchema } = require('../schemas/authSchema');
+const { registerSchema, loginSchema, updateProfileSchema, changePasswordSchema, forgotPasswordSchema, verifyOtpSchema, resetPasswordSchema, verifyEmailOtpSchema, resendEmailOtpSchema } = require('../schemas/authSchema');
 
 // Skip rate limiting saat testing atau saat flag DISABLE_RATE_LIMIT aktif.
 // Production tetap terlindungi (flag tidak di-set).
@@ -55,6 +55,12 @@ router.post('/verify-otp', otpLimiter, validate(verifyOtpSchema), verifyOtp);
 
 // Jalur: /api/auth/reset-password (Public)
 router.post('/reset-password', otpLimiter, validate(resetPasswordSchema), resetPassword);
+
+// Jalur: /api/auth/verify-email-otp (Public)
+router.post('/verify-email-otp', otpLimiter, validate(verifyEmailOtpSchema), verifyEmailOtp);
+
+// Jalur: /api/auth/resend-email-otp (Public)
+router.post('/resend-email-otp', otpLimiter, validate(resendEmailOtpSchema), resendEmailOtp);
 
 // Jalur: /api/auth/refresh (Public — menggunakan refresh_token cookie)
 router.post('/refresh', refreshAccessToken);

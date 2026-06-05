@@ -24,7 +24,7 @@ export default function Services() {
     try {
       const res = await api.get('/services');
       setServices(res.data);
-    } catch (err) {
+    } catch {
       toast.error('Gagal memuat daftar layanan.');
     } finally {
       setLoading(false);

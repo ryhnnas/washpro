@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
-import { Store, ArrowRight, User, Mail, Lock } from 'lucide-react';
+import { Store, ArrowRight, User, Mail, Phone } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Register() {
   const [formData, setFormData] = useState({
     businessName: '',
     ownerName: '',
     email: '',
-    password: ''
+    phone: '',
+    password: '',
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -18,11 +21,16 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     try {
-      await authService.register(formData);
-      toast.success('Bisnis berhasil didaftarkan! Silakan login.');
-      setTimeout(() => navigate('/login'), 1200);
+      if (formData.password !== formData.confirmPassword) {
+        toast.error('Konfirmasi password tidak cocok');
+        setLoading(false);
+        return;
+      }
+      const res = await authService.register(formData);
+      toast.success(res.message || 'Registrasi berhasil. OTP verifikasi email telah dikirim.');
+      setTimeout(() => navigate(`/verify-email?email=${encodeURIComponent(formData.email)}`), 800);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Gagal mendaftar. Periksa kembali data Anda.');
+      toast.error(err.response?.data?.message || err.response?.data?.error || 'Gagal mendaftar. Periksa kembali data Anda.');
     } finally {
       setLoading(false);
     }
@@ -84,20 +92,37 @@ export default function Register() {
               <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
             </div>
           </div>
-          
+
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Katasandi Pemilik</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Nomor WhatsApp</label>
             <div className="relative group">
-              <input 
-                type="password" 
-                placeholder="••••••••" 
-                className="premium-input bg-slate-50 premium-input-icon select-all"
-                onChange={e => setFormData({...formData, password: e.target.value})}
+              <input
+                type="tel"
+                placeholder="Contoh: 081234567890 / 628123..."
+                className="premium-input bg-slate-50 premium-input-icon"
+                onChange={e => setFormData({...formData, phone: e.target.value})}
                 required
-                minLength={6}
               />
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+              <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
             </div>
+          </div>
+          
+          <PasswordInput
+            label="Password Pemilik"
+            value={formData.password}
+            onChange={(v) => setFormData({ ...formData, password: v })}
+            required
+          />
+
+          <div>
+            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Konfirmasi Password</label>
+            <input
+              type="password"
+              placeholder="Ulangi password"
+              className="premium-input bg-slate-50 select-all"
+              onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
+              required
+            />
           </div>
 
           <button 

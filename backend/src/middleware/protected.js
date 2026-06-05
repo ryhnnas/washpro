@@ -7,8 +7,9 @@
  * Contoh: router.get('/', protectedRoute, getServices);
  */
 const authMiddleware = require('./auth');
+const userGuard = require('./userGuard');
 const checkSubscription = require('./checkSubscription');
 
-const protectedRoute = [authMiddleware, checkSubscription];
+const protectedRoute = [authMiddleware, userGuard, checkSubscription];
 
 module.exports = protectedRoute;

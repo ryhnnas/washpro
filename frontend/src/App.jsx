@@ -9,11 +9,13 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import VerifyEmail from './pages/VerifyEmail';
 import MainLayout from './layouts/MainLayout';
 import Paywall from './pages/Paywall';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import NotFound from './pages/NotFound';
+import StaffOnboarding from './pages/StaffOnboarding';
 
 // Halaman-halaman Tenant
 import Dashboard from './pages/Dashboard';
@@ -35,6 +37,15 @@ const ProtectedRoute = ({ children }) => {
     localStorage.removeItem('token');
     return <Navigate to="/login" />;
   }
+  try {
+    const stored = localStorage.getItem('user');
+    const u = stored ? JSON.parse(stored) : null;
+    if (u?.role === 'STAFF' && (!u.isEmailVerified || u.mustChangePassword)) {
+      if (window.location.pathname !== '/staff-onboarding') {
+        return <Navigate to="/staff-onboarding" />;
+      }
+    }
+  } catch { void 0; }
   return children;
 };
 
@@ -57,6 +68,7 @@ function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -67,6 +79,7 @@ function App() {
 
               {/* Paywall (butuh login tenant, tapi di luar MainLayout agar tidak ada sidebar) */}
               <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+              <Route path="/staff-onboarding" element={<ProtectedRoute><StaffOnboarding /></ProtectedRoute>} />
 
               {/* Dashboard POS di dalam MainLayout */}
               <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

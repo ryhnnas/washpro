@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ArrowRight, Mail, Lock } from 'lucide-react';
 
@@ -10,7 +10,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('suspended') === '1') {
+      setError('Akun Anda ditangguhkan. Mohon chat admin.');
+    }
+  }, [location.search]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -20,6 +28,10 @@ export default function Login() {
       const data = await authService.login(email, password);
       // Gunakan AuthContext login — sync ke localStorage + state sekaligus
       login(data.token, data.user);
+      if (data.user.role === 'STAFF' && (!data.user.isEmailVerified || data.user.mustChangePassword)) {
+        navigate('/staff-onboarding');
+        return;
+      }
       // Redirect berdasarkan role: STAFF ke kasir, OWNER ke dashboard
       if (data.user.role === 'STAFF') {
         navigate('/cashier');
@@ -27,6 +39,16 @@ export default function Login() {
         navigate('/dashboard');
       }
     } catch (err) {
+      const code = err.response?.data?.code;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        const emailToVerify = err.response?.data?.email || email;
+        navigate(`/verify-email?email=${encodeURIComponent(emailToVerify)}`);
+        return;
+      }
+      if (code === 'BUSINESS_SUSPENDED' || code === 'BUSINESS_DELETED') {
+        setError('Akun Anda ditangguhkan. Mohon chat admin untuk informasi lebih lanjut.');
+        return;
+      }
       setError(err.response?.data?.message || 'Login gagal. Periksa email dan password Anda.');
     } finally {
       setLoading(false);

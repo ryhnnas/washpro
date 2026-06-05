@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const path = require('path');
 const fs = require('fs');
 const { sendMessage } = require('../services/whatsappService');
+const emailService = require('../services/emailService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 const { sendError } = require('../utils/errorResponse');
 
@@ -76,7 +77,7 @@ const getPlans = async (req, res) => {
 const submitPayment = async (req, res) => {
   try {
     const businessId = req.user.businessId;
-    const { planId, paymentMethod = 'QRIS_DANA', phone } = req.body;
+    const { planId, paymentMethod = 'QRIS_DANA' } = req.body;
     const file = req.file; // disediakan oleh multer (handleUpload middleware)
 
     if (!planId) return res.status(400).json({ message: 'planId wajib diisi' });
@@ -99,16 +100,15 @@ const submitPayment = async (req, res) => {
     }
 
     const proofUrl = `/uploads/payments/${file.filename}`;
+    const proofApiPath = `/api/uploads/payments/${file.filename}`;
 
     // Buat record pembayaran & update status bisnis ke PENDING_PAYMENT beserta nomor telepon
-    const updateData = { subscriptionStatus: 'PENDING_PAYMENT' };
-    if (phone) updateData.phone = phone;
-
     const [payment] = await prisma.$transaction([
       prisma.subscriptionPayment.create({
         data: {
           businessId,
           planId,
+          uploadedByUserId: req.user.id,
           amount: plan.price,
           proofOfPayment: proofUrl,
           paymentMethod,
@@ -117,7 +117,7 @@ const submitPayment = async (req, res) => {
       }),
       prisma.business.update({
         where: { id: businessId },
-        data: updateData,
+        data: { subscriptionStatus: 'PENDING_PAYMENT' },
       }),
     ]);
 
@@ -130,11 +130,12 @@ const submitPayment = async (req, res) => {
       prisma.business.findUnique({ where: { id: businessId } }),
     ]);
     const ownerName = ownerUser?.name || businessInfo?.name || '-';
+    const tenantPhone = businessInfo?.phone || ownerUser?.phone;
 
     // 1. Kirim notifikasi ke Tenant (konfirmasi bukti transfer diterima)
-    if (phone) {
+    if (tenantPhone) {
       const tenantMsg = `⏳ *WashPro - Pembayaran Diterima*\n${'━'.repeat(28)}\nHalo *${ownerName}*,\n\nTerima kasih! Bukti pembayaran untuk paket *${plan.name}* sebesar *Rp ${plan.price.toLocaleString('id-ID')}* telah kami terima.\n\nPembayaran Anda sedang dalam proses verifikasi oleh Tim Admin (maks. 1x24 jam). Anda akan menerima notifikasi WA setelah dikonfirmasi.\n\n_Tim WashPro_`;
-      sendMessage({ businessId: 'SUPERADMIN', phone, message: tenantMsg }).catch(() => {});
+      sendMessage({ businessId: 'SUPERADMIN', phone: tenantPhone, message: tenantMsg }).catch(() => {});
     }
 
     // 2. Kirim notifikasi ke SuperAdmin (peringatan ada pembayaran masuk)
@@ -142,6 +143,46 @@ const submitPayment = async (req, res) => {
       const adminMsg = `🚨 *[WashPro Admin] Pembayaran Baru Menunggu Konfirmasi*\n${'━'.repeat(28)}\n🏪 Toko    : *${businessInfo?.name}*\n👤 Pemilik : ${ownerName}\n📦 Paket   : ${plan.name}\n💰 Nominal : Rp ${plan.price.toLocaleString('id-ID')}\n\nSegera buka Dashboard Superadmin untuk memverifikasi bukti pembayaran.\n_Notifikasi otomatis dari Sistem WashPro_`;
       sendMessage({ businessId: 'SUPERADMIN', phone: superAdminPhone, message: adminMsg }).catch(() => {});
     }
+
+    prisma.superAdmin.findMany({ select: { email: true } }).then((admins) => {
+      const toList = admins.map((a) => a.email).filter(Boolean);
+      if (toList.length === 0) return;
+
+      const adminPanelUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/superadmin/dashboard` : null;
+      const publicApiBaseRaw = process.env.PUBLIC_API_URL || process.env.BACKEND_URL || null;
+      const publicApiBase = publicApiBaseRaw
+        ? String(publicApiBaseRaw).replace(/\/$/, '').replace(/\/api$/, '')
+        : null;
+      const proofLink = publicApiBase ? `${publicApiBase}${proofApiPath}` : proofApiPath;
+
+      return emailService.sendEmail({
+        to: toList.join(','),
+        subject: 'WashPro - Subscription Baru Menunggu Konfirmasi',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+            <h2 style="color: #0f172a; margin: 0 0 8px;">Subscription Baru Menunggu Konfirmasi</h2>
+            <p style="margin: 0 0 16px; color: #334155;">Ada bukti pembayaran baru yang perlu diverifikasi.</p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr><td style="padding: 8px; color:#64748b;">Toko/Outlet</td><td style="padding: 8px; font-weight: 700;">${businessInfo?.name || '-'}</td></tr>
+              <tr><td style="padding: 8px; color:#64748b;">Email User</td><td style="padding: 8px;">${ownerUser?.email || '-'}</td></tr>
+              <tr><td style="padding: 8px; color:#64748b;">WhatsApp User</td><td style="padding: 8px;">${tenantPhone || '-'}</td></tr>
+              <tr><td style="padding: 8px; color:#64748b;">Paket</td><td style="padding: 8px;">${plan.name}</td></tr>
+              <tr><td style="padding: 8px; color:#64748b;">Tanggal</td><td style="padding: 8px;">${new Date(payment.createdAt).toLocaleString('id-ID')}</td></tr>
+              <tr><td style="padding: 8px; color:#64748b;">Status</td><td style="padding: 8px;">PENDING</td></tr>
+            </table>
+            <div style="margin-top: 16px;">
+              ${adminPanelUrl ? `<p style="margin:0;"><a href="${adminPanelUrl}" target="_blank" rel="noopener noreferrer">Buka Admin Panel</a></p>` : ''}
+              <p style="margin: 8px 0 0;"><a href="${proofLink}" target="_blank" rel="noopener noreferrer">Lihat Bukti Pembayaran</a></p>
+            </div>
+          </div>
+        `,
+      }).finally(() => {
+        prisma.subscriptionPayment.update({
+          where: { id: payment.id },
+          data: { adminEmailNotifiedAt: new Date() },
+        }).catch(() => {});
+      });
+    }).catch(() => {});
 
     res.status(201).json({
       message: 'Bukti pembayaran berhasil dikirim. Mohon tunggu konfirmasi dari Admin (biasanya dalam 1x24 jam).',

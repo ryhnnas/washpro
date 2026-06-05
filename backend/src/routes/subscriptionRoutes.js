@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
+const userGuard = require('../middleware/userGuard');
 const { handleUpload } = require('../middleware/upload');
 const { getStatus, getPlans, submitPayment, getMyPayments, getQrisInfo } = require('../controllers/subscriptionController');
 
 // Semua route di bawah butuh login sebagai tenant biasa
-router.use(authMiddleware);
+router.use(authMiddleware, userGuard);
 
 // GET /api/subscriptions/status — status langganan + sisa hari + flag banner H-7
 router.get('/status', getStatus);

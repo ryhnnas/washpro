@@ -71,7 +71,7 @@ export default function Paywall() {
   const handleSubmit = async () => {
     if (!selectedPlan) return setErrorMsg('Pilih paket terlebih dahulu');
     if (!proofFile) return setErrorMsg('Harap unggah bukti pembayaran');
-    if (!phone) return setErrorMsg('Nomor WhatsApp wajib diisi untuk notifikasi');
+    if (!phone) return setErrorMsg('Nomor WhatsApp belum diset. Silakan set di halaman Pengaturan Akun.');
     setLoading(true);
     setErrorMsg('');
     try {
@@ -80,7 +80,6 @@ export default function Paywall() {
       formData.append('planId', selectedPlan.id);
       formData.append('proofOfPayment', proofFile);
       formData.append('paymentMethod', 'QRIS_DANA');
-      formData.append('phone', phone);
 
       await api.post('/subscriptions/pay', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -104,6 +103,10 @@ export default function Paywall() {
   };
 
   const hasPendingPayment = payments.some((p) => p.status === 'PENDING');
+  const canAccessDashboard = status?.subscriptionStatus === 'TRIAL' || status?.subscriptionStatus === 'ACTIVE';
+  const topCta = canAccessDashboard
+    ? { label: 'Kembali ke Dashboard', to: '/dashboard' }
+    : { label: 'Lihat Status Langganan', to: '/subscription' };
 
   const planIcons = [Zap, Star, Shield];
 
@@ -112,11 +115,11 @@ export default function Paywall() {
       {/* Top Bar / Back Button */}
       <div className="max-w-5xl mx-auto mb-6 flex items-center justify-start">
         <button
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate(topCta.to)}
           className="flex items-center gap-2 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl border border-white/10 transition-all text-sm font-bold shadow-lg"
         >
           <ArrowLeft size={16} />
-          <span>Kembali ke Dashboard</span>
+          <span>{topCta.label}</span>
         </button>
       </div>
 
@@ -308,12 +311,23 @@ export default function Paywall() {
                     <input
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
                       placeholder="Contoh: 081234567890"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-blue-400 text-sm transition-colors"
                       required
+                      disabled
                     />
-                    <p className="text-[11px] text-slate-400 mt-1">Kami akan mengirimkan notifikasi WA ke nomor ini setelah pembayaran disetujui.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Nomor WhatsApp notifikasi diambil dari data akun. Ubah nomor dari halaman Pengaturan Akun.
+                    </p>
+                    {!phone && (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/profile')}
+                        className="mt-2 text-xs font-black text-blue-300 hover:text-blue-200 underline underline-offset-4"
+                      >
+                        Set Nomor WhatsApp Sekarang
+                      </button>
+                    )}
                   </div>
 
                   <div className="pt-2 border-t border-white/10">

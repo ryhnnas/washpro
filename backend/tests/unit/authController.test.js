@@ -14,12 +14,18 @@ jest.mock('../../src/config/prisma', () => {
     },
     business: {
       create: jest.fn(),
+      findUnique: jest.fn(),
     },
     businessSetting: {
       create: jest.fn(),
     },
     service: {
       createMany: jest.fn(),
+    },
+    emailVerificationOtp: {
+      findFirst: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
     },
     $transaction: jest.fn(callback => callback(mockPrisma)),
   };
@@ -28,6 +34,9 @@ jest.mock('../../src/config/prisma', () => {
 
 jest.mock('bcryptjs');
 jest.mock('jsonwebtoken');
+jest.mock('../../src/services/emailService', () => ({
+  sendEmail: jest.fn().mockResolvedValue({ ok: true }),
+}));
 
 describe('Auth Controller - Unit Tests', () => {
   let req, res;
@@ -45,9 +54,10 @@ describe('Auth Controller - Unit Tests', () => {
   describe('login', () => {
     it('should login successfully with correct credentials', async () => {
       req.body = { email: 'test@example.com', password: 'password123' };
-      const mockUser = { id: '1', email: 'test@example.com', password: 'hashed_password', businessId: 'biz-1' };
+      const mockUser = { id: '1', email: 'test@example.com', password: 'hashed_password', businessId: 'biz-1', role: 'OWNER', isEmailVerified: true, mustChangePassword: false, phone: null, name: 'Test' };
 
       prisma.user.findUnique.mockResolvedValue(mockUser);
+      prisma.business.findUnique.mockResolvedValue({ subscriptionStatus: 'ACTIVE', deletedAt: null });
       bcrypt.compare.mockResolvedValue(true);
       jwt.sign.mockReturnValue('mock_token');
 
@@ -71,7 +81,7 @@ describe('Auth Controller - Unit Tests', () => {
 
     it('should return 401 for incorrect password', async () => {
       req.body = { email: 'test@example.com', password: 'wrong' };
-      prisma.user.findUnique.mockResolvedValue({ password: 'hashed' });
+      prisma.user.findUnique.mockResolvedValue({ password: 'hashed', businessId: 'biz-1', role: 'OWNER', isEmailVerified: true });
       bcrypt.compare.mockResolvedValue(false);
 
       await login(req, res);
@@ -83,11 +93,14 @@ describe('Auth Controller - Unit Tests', () => {
 
   describe('registerOwner', () => {
     it('should create business, user, settings, and default services in a transaction', async () => {
-      req.body = { businessName: 'WashIt', ownerName: 'Owner', email: 'owner@washit.com', password: 'pass' };
+      req.body = { businessName: 'WashIt', ownerName: 'Owner', email: 'owner@washit.com', password: 'pass', phone: '6281234567890' };
 
       bcrypt.hash.mockResolvedValue('hashed');
       prisma.business.create.mockResolvedValue({ id: 'biz-1' });
-      prisma.user.create.mockResolvedValue({ id: 'user-1' });
+      prisma.user.create.mockResolvedValue({ id: 'user-1', email: 'owner@washit.com', name: 'Owner' });
+      prisma.emailVerificationOtp.findFirst.mockResolvedValue(null);
+      prisma.emailVerificationOtp.count.mockResolvedValue(0);
+      prisma.emailVerificationOtp.create.mockResolvedValue({ id: 'otp-1' });
 
       await registerOwner(req, res);
 

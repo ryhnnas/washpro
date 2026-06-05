@@ -31,13 +31,80 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [proofModal, setProofModal] = useState(null); // { payment, imageUrl }
   const [confirmModal, setConfirmModal] = useState(null); // { type, id, label }
+  const [confirmName, setConfirmName] = useState('');
   const [plans, setPlans] = useState([]);
   const [planModal, setPlanModal] = useState(null);
   const [toast, setToast] = useState(null);
   const navigate = useNavigate();
 
   const admin = JSON.parse(localStorage.getItem('superadmin_user') || '{}');
-  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+  const normalizeProofPath = (p) => {
+    if (!p) return null;
+
+    const raw = String(p);
+
+    if (raw.startsWith('/uploads/payments/')) return raw;
+    if (raw.startsWith('/api/uploads/payments/')) return raw.replace(/^\/api/, '');
+
+    if (raw.includes('/api/uploads/payments/')) {
+      const idx = raw.indexOf('/api/uploads/payments/');
+      return raw.slice(idx).replace(/^\/api/, '');
+    }
+
+    if (raw.includes('/uploads/payments/')) {
+      const idx = raw.indexOf('/uploads/payments/');
+      return raw.slice(idx);
+    }
+
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      try {
+        const u = new URL(raw);
+        if (u.pathname.startsWith('/api/uploads/payments/')) return u.pathname.replace(/^\/api/, '');
+        if (u.pathname.startsWith('/uploads/payments/')) return u.pathname;
+        return null;
+      } catch {
+        return null;
+      }
+    }
+
+    if (raw.startsWith('proof_') || raw.endsWith('.png') || raw.endsWith('.jpg') || raw.endsWith('.jpeg') || raw.endsWith('.webp') || raw.endsWith('.pdf')) {
+      return `/uploads/payments/${raw}`;
+    }
+
+    return null;
+  };
+
+  useEffect(() => {
+    return () => {
+      if (proofModal?.objectUrl) URL.revokeObjectURL(proofModal.objectUrl);
+    };
+  }, [proofModal]);
+
+  const openProofModal = async (payment) => {
+    try {
+      const proofPath = normalizeProofPath(payment.proofOfPayment);
+      if (!proofPath) {
+        showToast('Bukti pembayaran tidak tersedia', 'error');
+        return;
+      }
+
+      const filename = proofPath.split('/').pop();
+      const res = await superAdminApi.get(proofPath, { responseType: 'blob' });
+      const objectUrl = URL.createObjectURL(res.data);
+      setProofModal({
+        id: payment.id,
+        status: payment.status,
+        objectUrl,
+        fileName: filename || `bukti_${payment.id}.jpg`,
+        businessName: payment.business?.name,
+        planName: payment.plan?.name,
+        amount: payment.amount,
+      });
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Gagal memuat bukti pembayaran', 'error');
+    }
+  };
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -45,29 +112,32 @@ export default function SuperAdminDashboard() {
   };
 
   const fetchStats = useCallback(async () => {
-    try { const r = await superAdminApi.get('/superadmin/stats'); setStats(r.data); } catch {}
+    try { const r = await superAdminApi.get('/superadmin/stats'); setStats(r.data); } catch { void 0; }
   }, []);
 
   const fetchBusinesses = useCallback(async () => {
     setLoading(true);
-    try { const r = await superAdminApi.get('/superadmin/businesses'); setBusinesses(r.data.businesses || []); } catch {} finally { setLoading(false); }
+    try { const r = await superAdminApi.get('/superadmin/businesses'); setBusinesses(r.data.businesses || []); } catch { void 0; } finally { setLoading(false); }
   }, []);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
-    try { const r = await superAdminApi.get(`/superadmin/payments?status=${paymentFilter}`); setPayments(r.data.payments || []); } catch {} finally { setLoading(false); }
+    try { const r = await superAdminApi.get(`/superadmin/payments?status=${paymentFilter}`); setPayments(r.data.payments || []); } catch { void 0; } finally { setLoading(false); }
   }, [paymentFilter]);
 
   const fetchPlans = useCallback(async () => {
     setLoading(true);
-    try { const r = await superAdminApi.get('/superadmin/plans'); setPlans(r.data || []); } catch {} finally { setLoading(false); }
+    try { const r = await superAdminApi.get('/superadmin/plans'); setPlans(r.data || []); } catch { void 0; } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('superadmin_token');
     if (!token) navigate('/superadmin/login');
-    fetchStats();
-  }, []);
+    const t = setTimeout(() => {
+      fetchStats();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchStats, navigate]);
 
   useEffect(() => { if (tab === 'businesses') fetchBusinesses(); }, [tab, fetchBusinesses]);
   useEffect(() => { if (tab === 'payments') fetchPayments(); }, [tab, paymentFilter, fetchPayments]);
@@ -100,8 +170,8 @@ export default function SuperAdminDashboard() {
 
   const handleDelete = async (businessId) => {
     try {
-      await superAdminApi.delete(`/superadmin/businesses/${businessId}`);
-      showToast('Toko dan seluruh datanya berhasil dihapus!');
+      await superAdminApi.delete(`/superadmin/businesses/${businessId}`, { data: { confirmName } });
+      showToast('Toko berhasil dinonaktifkan.');
       setConfirmModal(null); fetchBusinesses(); fetchStats();
     } catch (err) { showToast(err.response?.data?.message || 'Gagal hapus', 'error'); }
   };
@@ -155,15 +225,18 @@ export default function SuperAdminDashboard() {
           </div>
         </div>
         <nav className="flex-1 px-3 space-y-1">
-          {navItems.map(({ id, label, icon: Icon, badge }) => (
-            <button key={id} onClick={() => setTab(id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+          {navItems.map((item) => {
+            const IconComponent = item.icon;
+            return (
+            <button key={item.id} onClick={() => setTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === item.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
             >
-              <Icon size={18} />
-              <span>{label}</span>
-              {badge > 0 && <span className="ml-auto bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{badge}</span>}
+              <IconComponent size={18} />
+              <span>{item.label}</span>
+              {item.badge > 0 && <span className="ml-auto bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{item.badge}</span>}
             </button>
-          ))}
+            );
+          })}
         </nav>
         <div className="px-3 mt-4">
           <div className="px-3 py-2 mb-3">
@@ -194,20 +267,34 @@ export default function SuperAdminDashboard() {
                 <h3 className="text-white font-bold">Bukti Pembayaran</h3>
                 <button onClick={() => setProofModal(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
               </div>
-              <img src={proofModal.url.startsWith('/uploads') ? `${API_BASE.replace('/api', '')}${proofModal.url}` : proofModal.url}
-                alt="Bukti" className="w-full rounded-xl max-h-96 object-contain bg-white" />
+              <img
+                src={proofModal.objectUrl}
+                alt="Bukti"
+                className="w-full rounded-xl max-h-96 object-contain bg-white"
+              />
               <div className="mt-3 text-slate-400 text-sm space-y-1">
                 <p>Toko: <span className="text-white font-semibold">{proofModal.businessName}</span></p>
                 <p>Paket: <span className="text-white">{proofModal.planName}</span></p>
                 <p>Nominal: <span className="text-white font-bold">{formatIDR(proofModal.amount)}</span></p>
               </div>
               <div className="flex gap-2 mt-4">
-                <button onClick={() => { handleApprove(proofModal.id); setProofModal(null); }} className="flex-1 py-2.5 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <CheckCircle size={16} /> Approve
-                </button>
-                <button onClick={() => { handleReject(proofModal.id, 'Bukti tidak valid'); setProofModal(null); }} className="flex-1 py-2.5 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <XCircle size={16} /> Tolak
-                </button>
+                <a
+                  href={proofModal.objectUrl}
+                  download={proofModal.fileName}
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  Download
+                </a>
+                {proofModal.status === 'PENDING' && (
+                  <>
+                    <button onClick={() => { handleApprove(proofModal.id); setProofModal(null); }} className="flex-1 py-2.5 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                      <CheckCircle size={16} /> Approve
+                    </button>
+                    <button onClick={() => { handleReject(proofModal.id, 'Bukti tidak valid'); setProofModal(null); }} className="flex-1 py-2.5 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
+                      <XCircle size={16} /> Tolak
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -220,15 +307,27 @@ export default function SuperAdminDashboard() {
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-3 bg-red-500/20 rounded-xl"><AlertTriangle size={24} className="text-red-400" /></div>
                 <div>
-                  <h3 className="text-white font-bold">Hapus Toko Permanen?</h3>
-                  <p className="text-slate-400 text-sm">Tindakan ini tidak dapat dibatalkan.</p>
+                  <h3 className="text-white font-bold">Nonaktifkan Toko?</h3>
+                  <p className="text-slate-400 text-sm">Toko akan di-soft delete (dinonaktifkan).</p>
                 </div>
               </div>
-              <p className="text-slate-300 text-sm mb-6">Seluruh data toko <strong className="text-white">{confirmModal.label}</strong> termasuk transaksi, pelanggan, dan layanan akan dihapus permanen dari database.</p>
+              <p className="text-slate-300 text-sm mb-4">
+                Ketik nama toko <strong className="text-white">{confirmModal.label}</strong> untuk konfirmasi.
+              </p>
+              <input
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-red-400 text-sm"
+                placeholder={confirmModal.label}
+              />
               <div className="flex gap-3">
-                <button onClick={() => setConfirmModal(null)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-colors font-semibold">Batal</button>
-                <button onClick={() => handleDelete(confirmModal.id)} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold transition-colors flex items-center justify-center gap-2">
-                  <Trash2 size={16} /> Hapus Permanen
+                <button onClick={() => { setConfirmModal(null); setConfirmName(''); }} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-colors font-semibold">Batal</button>
+                <button
+                  onClick={() => handleDelete(confirmModal.id)}
+                  disabled={(confirmName || '').trim() !== (confirmModal.label || '').trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-50 disabled:hover:bg-red-500 text-white font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={16} /> Nonaktifkan
                 </button>
               </div>
             </div>
@@ -324,13 +423,16 @@ export default function SuperAdminDashboard() {
                     { label: 'Toko Aktif', value: stats.activeBusinesses, icon: CheckCircle, color: 'green' },
                     { label: 'Masa Trial', value: stats.trialBusinesses, icon: Clock, color: 'blue' },
                     { label: 'Menunggu Konfirmasi', value: stats.pendingPayments, icon: CreditCard, color: 'amber' },
-                  ].map(({ label, value, icon: Icon, color }) => (
-                    <div key={label} className={`bg-${color}-500/10 border border-${color}-400/20 rounded-2xl p-5`}>
-                      <Icon size={20} className={`text-${color}-400 mb-3`} />
-                      <p className="text-3xl font-black text-white">{value}</p>
-                      <p className="text-slate-400 text-sm mt-1">{label}</p>
-                    </div>
-                  ))}
+                  ].map((card) => {
+                    const IconComponent = card.icon;
+                    return (
+                      <div key={card.label} className={`bg-${card.color}-500/10 border border-${card.color}-400/20 rounded-2xl p-5`}>
+                        <IconComponent size={20} className={`text-${card.color}-400 mb-3`} />
+                        <p className="text-3xl font-black text-white">{card.value}</p>
+                        <p className="text-slate-400 text-sm mt-1">{card.label}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : <div className="text-slate-500">Memuat statistik...</div>}
               <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
@@ -381,7 +483,7 @@ export default function SuperAdminDashboard() {
                       </div>
                       <div className="flex gap-2 flex-shrink-0">
                         <button
-                          onClick={() => setProofModal({ id: p.id, url: p.proofOfPayment, businessName: p.business?.name, planName: p.plan?.name, amount: p.amount })}
+                          onClick={() => openProofModal(p)}
                           className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold transition-colors flex items-center gap-1.5"
                         >
                           <Eye size={14} /> Lihat Bukti
@@ -558,9 +660,14 @@ const WhatsAppSuperAdminSettings = () => {
   };
 
   useEffect(() => {
-    fetchStatus();
+    const t = setTimeout(() => {
+      fetchStatus();
+    }, 0);
     const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(t);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleQR = async () => {
@@ -595,7 +702,7 @@ const WhatsAppSuperAdminSettings = () => {
       await superAdminApi.post('/superadmin/whatsapp/disconnect');
       setWaStatus(prev => ({ ...prev, status: 'disconnected' }));
       await fetchStatus();
-    } catch (e) {
+    } catch {
       alert("Gagal disconnect");
     }
     setLoading(false);

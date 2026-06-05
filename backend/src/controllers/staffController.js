@@ -1,5 +1,33 @@
 const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const emailService = require('../services/emailService');
+
+const sendStaffEmailVerificationOtp = async ({ userId, email, name }) => {
+  const otpPlain = crypto.randomInt(100000, 999999).toString();
+  const otpHashed = await bcrypt.hash(otpPlain, 10);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  await prisma.emailVerificationOtp.create({
+    data: { userId, otp: otpHashed, expiresAt },
+  });
+
+  await emailService.sendEmail({
+    to: email,
+    subject: 'WashPro - Kode Verifikasi Email',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <h2 style="color: #4f46e5; text-align: center;">WashPro - Verifikasi Email</h2>
+        <p>Halo <strong>${name || 'Staf'}</strong>,</p>
+        <p>Gunakan kode OTP berikut untuk memverifikasi email Anda:</p>
+        <div style="text-align: center; margin: 28px 0;">
+          <span style="display: inline-block; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #0f172a; background: #f8fafc; padding: 16px 24px; border-radius: 10px;">${otpPlain}</span>
+        </div>
+        <p>Kode ini berlaku selama <strong>10 menit</strong>. Jangan bagikan kode ini kepada siapa pun.</p>
+      </div>
+    `,
+  });
+};
 
 // Ambil daftar staff berdasarkan businessId dari user (owner) yang login
 const getStaff = async (req, res) => {
@@ -20,7 +48,10 @@ const getStaff = async (req, res) => {
     });
     res.json(staffList);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    if (error?.code === 'P2022') {
+      return res.status(500).json({ message: "Database belum termigrasi. Jalankan prisma migrate terlebih dahulu." });
+    }
+    res.status(500).json({ message: "Terjadi kesalahan pada server" });
   }
 };
 
@@ -50,10 +81,14 @@ const createStaff = async (req, res) => {
         password: hashedPassword,
         phone: phone || null,
         role: 'STAFF',
-        businessId: businessId
+        businessId: businessId,
+        mustChangePassword: true,
+        isEmailVerified: false,
       },
       select: { id: true, name: true, email: true, phone: true, createdAt: true }
     });
+
+    sendStaffEmailVerificationOtp({ userId: newStaff.id, email: newStaff.email, name: newStaff.name }).catch(() => {});
 
     res.status(201).json({ message: "Staf berhasil ditambahkan", data: newStaff });
   } catch (error) {

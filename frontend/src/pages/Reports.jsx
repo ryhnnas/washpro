@@ -12,7 +12,6 @@ import {
 } from 'recharts';
 import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);
-import html2canvas from 'html2canvas';
 
 export default function Reports() {
   const [transactions, setTransactions] = useState([]);
@@ -25,7 +24,6 @@ export default function Reports() {
   const [dateFilter, setDateFilter] = useState('hari_ini');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
   const [dailyRevenue, setDailyRevenue] = useState([]);
   const [statusBreakdown, setStatusBreakdown] = useState([]);
@@ -62,7 +60,6 @@ export default function Reports() {
 
         const txRes = await api.get(`/transactions?page=${page}&limit=50&search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
         setTransactions(txRes.data.data || []);
-        setTotalPages(txRes.data.pagination?.totalPages || 1);
 
         const chartRes = await api.get(`/reports/charts?startDate=${startDate}&endDate=${endDate}&search=${debouncedSearch}`);
         setDailyRevenue(chartRes.data.dailyRevenue || []);
@@ -293,7 +290,7 @@ export default function Reports() {
 
       XLSX.writeFile(wb, `Laporan_${new Date().getTime()}.xlsx`);
       toast.success('Excel berhasil diunduh', { id: toastId });
-    } catch (err) {
+    } catch {
       toast.error('Gagal export Excel', { id: toastId });
     } finally {
       setExportLoading(false);

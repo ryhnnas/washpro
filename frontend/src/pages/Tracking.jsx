@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../lib/axios';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -49,7 +49,7 @@ export default function Tracking() {
   const [overdueCount, setOverdueCount] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, id: null, currentStatus: null });
 
-  const fetchTransactions = async (currentPage = page) => {
+  const fetchTransactions = useCallback(async (currentPage) => {
     setLoading(true);
     try {
       const res = await api.get(`/transactions?limit=${LIMIT}&page=${currentPage}`);
@@ -61,11 +61,14 @@ export default function Tracking() {
       console.error(err);
     }
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    fetchTransactions(page);
-  }, [page]);
+    const t = setTimeout(() => {
+      fetchTransactions(page);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [page, fetchTransactions]);
 
   const showToast = (type, message) => {
     setToast({ type, message });
@@ -96,7 +99,7 @@ export default function Tracking() {
       } else {
         showToast('success', `Status berhasil diubah ke ${next}.`);
       }
-    } catch (err) {
+    } catch {
       showToast('error', 'Gagal update status');
       fetchTransactions(page);
     }
@@ -169,7 +172,6 @@ export default function Tracking() {
         
         {filtered.map(t => {
           const config = STATUS_CONFIG[t.status];
-          const isDone = t.status === 'DIAMBIL';
           
           return (
             <div key={t.id} className="glass-card bg-white p-6 rounded-3xl hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden group">

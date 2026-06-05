@@ -83,7 +83,7 @@ export default function Customers() {
       setEditingId(null);
       setFormData({ name: '', phone: '', address: '' });
       fetchCustomers();
-    } catch (err) {
+    } catch {
       toast.error('Gagal menyimpan data pelanggan. Pastikan nomor HP tidak duplikat.');
     }
     setLoading(false);
@@ -127,7 +127,7 @@ export default function Customers() {
           await api.delete(`/customers/${id}`);
           toast.success('Pelanggan berhasil dihapus.');
           fetchCustomers();
-        } catch (err) {
+        } catch {
           toast.error('Gagal menghapus. Pelanggan ini mungkin masih memiliki transaksi aktif.');
         }
       }
