@@ -3,7 +3,7 @@ import { authService } from '../services/authService';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import PasswordInput from '../components/PasswordInput';
+import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -25,6 +25,11 @@ export default function ResetPassword() {
 
     if (password !== confirmPassword) {
       toast.error('Konfirmasi kata sandi tidak cocok.');
+      return;
+    }
+    const policyErrors = getPasswordPolicyErrors(password);
+    if (policyErrors.length > 0) {
+      toast.error(policyErrors[0]);
       return;
     }
 

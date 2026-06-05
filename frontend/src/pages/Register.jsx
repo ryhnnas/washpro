@@ -3,7 +3,7 @@ import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
 import { Store, ArrowRight, User, Mail, Phone } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
-import PasswordInput from '../components/PasswordInput';
+import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -21,6 +21,12 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
     try {
+      const policyErrors = getPasswordPolicyErrors(formData.password);
+      if (policyErrors.length > 0) {
+        toast.error(policyErrors[0]);
+        setLoading(false);
+        return;
+      }
       if (formData.password !== formData.confirmPassword) {
         toast.error('Konfirmasi password tidak cocok');
         setLoading(false);

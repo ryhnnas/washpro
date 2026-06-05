@@ -6,13 +6,20 @@ const errorMiddleware = (err, req, res, next) => {
 
   // Jika error dari Zod (Validation Error)
   if (err.name === 'ZodError') {
+    const issues = Array.isArray(err.issues)
+      ? err.issues
+      : Array.isArray(err.errors)
+        ? err.errors
+        : [];
+
+    const firstMessage = issues.length > 0 ? issues[0]?.message : null;
     return res.status(400).json({
       status: 'fail',
-      message: 'Validasi data gagal',
-      errors: Array.isArray(err.errors) ? err.errors.map(e => ({
-        path: e.path.join('.'),
+      message: firstMessage || 'Validasi data gagal',
+      errors: issues.map(e => ({
+        path: Array.isArray(e.path) ? e.path.join('.') : String(e.path || ''),
         message: e.message
-      })) : []
+      }))
     });
   }
 

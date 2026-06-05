@@ -5,7 +5,7 @@ import { Mail, Phone, ShieldCheck } from 'lucide-react';
 import api from '../lib/axios';
 import { authService } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
-import PasswordInput from '../components/PasswordInput';
+import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 const normalizeIndonesianPhone = (value) => {
   const raw = String(value || '').trim();
@@ -73,6 +73,8 @@ export default function StaffOnboarding() {
   const handleChangePassword = async () => {
     if (!currentPassword) return toast.error('Password saat ini wajib diisi');
     if (!newPassword) return toast.error('Password baru wajib diisi');
+    const policyErrors = getPasswordPolicyErrors(newPassword);
+    if (policyErrors.length > 0) return toast.error(policyErrors[0]);
     if (newPassword !== confirmPassword) return toast.error('Konfirmasi password tidak cocok');
     setLoading(true);
     try {
@@ -256,4 +258,3 @@ export default function StaffOnboarding() {
     </div>
   );
 }
-

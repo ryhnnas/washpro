@@ -1,6 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Info, Lock } from 'lucide-react';
 
+export const getPasswordPolicyErrors = (password) => {
+  const p = String(password || '');
+  const errors = [];
+  if (p.length < 8) errors.push('Password minimal 8 karakter');
+  if (!/[A-Z]/.test(p)) errors.push('Password harus mengandung huruf besar');
+  if (!/[a-z]/.test(p)) errors.push('Password harus mengandung huruf kecil');
+  if (!/[0-9]/.test(p)) errors.push('Password harus mengandung angka');
+  if (!/[^A-Za-z0-9]/.test(p)) errors.push('Password harus mengandung simbol');
+  return errors;
+};
+
+export const isPasswordPolicyValid = (password) => getPasswordPolicyErrors(password).length === 0;
+
 const getStrength = (password) => {
   const p = password || '';
   let score = 0;
@@ -94,4 +107,3 @@ export default function PasswordInput({
     </div>
   );
 }
-

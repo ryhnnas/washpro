@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { UserPlus, Search, Trash2, Edit2, X, Check, Loader2, User, Mail, Phone } from 'lucide-react';
 import api from '../lib/axios';
 import toast, { Toaster } from 'react-hot-toast';
-import PasswordInput from '../components/PasswordInput';
+import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 export default function Staff() {
   const [staff, setStaff] = useState([]);
@@ -59,6 +59,12 @@ export default function Staff() {
     try {
       if (editingStaff) {
         if (formData.password) {
+          const policyErrors = getPasswordPolicyErrors(formData.password);
+          if (policyErrors.length > 0) {
+            toast.error(policyErrors[0]);
+            setFormLoading(false);
+            return;
+          }
           if (!formData.confirmPassword) {
             toast.error("Konfirmasi password wajib diisi");
             setFormLoading(false);
@@ -75,6 +81,12 @@ export default function Staff() {
       } else {
         if (!formData.password) {
           toast.error("Password wajib diisi untuk staf baru");
+          setFormLoading(false);
+          return;
+        }
+        const policyErrors = getPasswordPolicyErrors(formData.password);
+        if (policyErrors.length > 0) {
+          toast.error(policyErrors[0]);
           setFormLoading(false);
           return;
         }

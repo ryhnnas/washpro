@@ -3,7 +3,7 @@ import { User, Lock, Save, AlertCircle, Phone } from 'lucide-react';
 import api from '../lib/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import PasswordInput from '../components/PasswordInput';
+import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 const normalizeIndonesianPhone = (value) => {
   const raw = String(value || '').trim();
@@ -51,6 +51,12 @@ export default function Profile() {
       if (formData.password) {
         if (!formData.currentPassword) {
           toast.error('Password saat ini wajib diisi');
+          setLoading(false);
+          return;
+        }
+        const policyErrors = getPasswordPolicyErrors(formData.password);
+        if (policyErrors.length > 0) {
+          toast.error(policyErrors[0]);
           setLoading(false);
           return;
         }
