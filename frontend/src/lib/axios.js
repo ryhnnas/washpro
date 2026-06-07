@@ -132,9 +132,24 @@ api.interceptors.response.use(
 
     // 403 dengan subscriptionStatus: subscription issue → redirect ke paywall
     if (status === 403 && data?.subscriptionStatus) {
+      if (data.subscriptionStatus === 'SUSPENDED') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (!currentPath.startsWith('/login')) {
+          window.location.href = '/login?suspended=1';
+        }
+        return Promise.reject(error);
+      }
       const subscriptionPaths = ['/paywall', '/subscription'];
       if (!subscriptionPaths.some((p) => currentPath.startsWith(p))) {
         window.location.href = '/paywall';
+      }
+      return Promise.reject(error);
+    }
+
+    if (status === 403 && data?.code === 'STAFF_ONBOARDING_REQUIRED') {
+      if (!currentPath.startsWith('/staff-onboarding')) {
+        window.location.href = '/staff-onboarding';
       }
       return Promise.reject(error);
     }

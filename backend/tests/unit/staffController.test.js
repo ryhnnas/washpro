@@ -8,9 +8,15 @@ jest.mock('../../src/config/prisma', () => ({
     findUnique: jest.fn(),
     create: jest.fn(),
   },
+  emailVerificationOtp: {
+    create: jest.fn(),
+  },
 }));
 
 jest.mock('bcryptjs');
+jest.mock('../../src/services/emailService', () => ({
+  sendEmail: jest.fn().mockResolvedValue({ ok: true }),
+}));
 
 describe('Staff Controller - Unit Tests', () => {
   let req, res;
@@ -40,6 +46,7 @@ describe('Staff Controller - Unit Tests', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     bcrypt.hash.mockResolvedValue('hashed');
     prisma.user.create.mockResolvedValue({ id: 's2', name: 'New Staff' });
+    prisma.emailVerificationOtp.create.mockResolvedValue({ id: 'otp-1' });
 
     await createStaff(req, res);
 

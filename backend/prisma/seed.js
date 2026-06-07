@@ -73,6 +73,17 @@ async function main() {
   });
   console.log("✅ SuperAdmin seeded");
 
+  await prisma.business.upsert({
+    where: { id: "SUPERADMIN" },
+    update: { name: "WashPro System" },
+    create: {
+      id: "SUPERADMIN",
+      name: "WashPro System",
+      subscriptionStatus: "SUSPENDED",
+      deletedAt: new Date(),
+    },
+  });
+
   // 0b. Subscription Plans
   const planBulanan = await prisma.subscriptionPlan.upsert({
     where: { id: "plan-bulanan-washpro" },
@@ -102,7 +113,7 @@ async function main() {
       data: {
         name: "WashPro Demo Laundry",
         address: "Jl. Demo No. 123, Jakarta Selatan",
-        phone: "021-12345678",
+        phone: "6281234567890",
         subscriptionStatus: "ACTIVE",
         trialEndAt: trialEndAt,
         subscriptionEndAt: subscriptionEndAt,
@@ -116,6 +127,7 @@ async function main() {
         subscriptionStatus: "ACTIVE",
         trialEndAt: trialEndAt,
         subscriptionEndAt: subscriptionEndAt,
+        phone: "6281234567890",
       },
     });
   }
@@ -123,14 +135,14 @@ async function main() {
   // 2. Users
   await prisma.user.upsert({
     where: { email: "owner@washpro.local" },
-    update: { name: "Owner Demo", role: "OWNER", businessId: business.id, password: ownerHashedPassword },
-    create: { name: "Owner Demo", email: "owner@washpro.local", role: "OWNER", businessId: business.id, password: ownerHashedPassword },
+    update: { name: "Owner Demo", role: "OWNER", businessId: business.id, password: ownerHashedPassword, phone: "6281234567890", isEmailVerified: true, mustChangePassword: false },
+    create: { name: "Owner Demo", email: "owner@washpro.local", role: "OWNER", businessId: business.id, password: ownerHashedPassword, phone: "6281234567890", isEmailVerified: true, mustChangePassword: false },
   });
 
   await prisma.user.upsert({
     where: { email: "staff@washpro.local" },
-    update: { name: "Staff Demo", role: "STAFF", businessId: business.id, password: staffHashedPassword },
-    create: { name: "Staff Demo", email: "staff@washpro.local", role: "STAFF", businessId: business.id, password: staffHashedPassword },
+    update: { name: "Staff Demo", role: "STAFF", businessId: business.id, password: staffHashedPassword, phone: "6281234567890", isEmailVerified: true, mustChangePassword: false },
+    create: { name: "Staff Demo", email: "staff@washpro.local", role: "STAFF", businessId: business.id, password: staffHashedPassword, phone: "6281234567890", isEmailVerified: true, mustChangePassword: false },
   });
 
   // 3. Business Setting

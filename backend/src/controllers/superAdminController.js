@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const whatsappService = require('../services/whatsappService');
+const emailService = require('../services/emailService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 const { sendError } = require('../utils/errorResponse');
 
@@ -114,6 +115,37 @@ const toggleBusiness = async (req, res) => {
 
     invalidateSubscriptionCache(businessId);
 
+    if (action === 'SUSPEND') {
+      const ownerUser = await prisma.user.findFirst({
+        where: { businessId, role: 'OWNER' },
+        select: { name: true, email: true },
+      });
+
+      if (ownerUser?.email) {
+        emailService.sendEmail({
+          to: ownerUser.email,
+          subject: 'WashPro - Akun Ditangguhkan',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+              <h2 style="color:#0f172a; margin:0 0 8px;">Akun Anda Ditangguhkan</h2>
+              <p style="margin:0 0 12px; color:#334155;">Halo <strong>${ownerUser.name || business.name}</strong>,</p>
+              <p style="margin:0 0 12px; color:#334155;">Akun WashPro Anda ditangguhkan oleh Admin. Mohon chat admin untuk informasi lebih lanjut.</p>
+              ${reason ? `<p style="margin:0; color:#64748b;">Alasan: ${String(reason)}</p>` : ''}
+            </div>
+          `,
+        }).catch(() => {});
+      }
+
+      if (business.phone) {
+        const msg = `⚠️ *WashPro - Akun Ditangguhkan*\n${'━'.repeat(28)}\nHalo *${ownerUser?.name || business.name}*,\n\nAkun WashPro Anda ditangguhkan oleh Admin.\nMohon chat admin untuk informasi lebih lanjut.\n${reason ? `\nAlasan: ${reason}\n` : ''}\n_Tim WashPro_`;
+        whatsappService.sendMessage({
+          businessId: 'SUPERADMIN',
+          phone: business.phone,
+          message: msg,
+        }).catch(() => {});
+      }
+    }
+
     res.json({ message: `Toko berhasil ${action === 'SUSPEND' ? 'ditangguhkan' : 'diaktifkan'}`, business: updated });
   } catch (err) {
     sendError(res, err, 500);
@@ -174,6 +206,7 @@ const getPayments = async (req, res) => {
         include: {
           business: { select: { name: true, phone: true } },
           plan: { select: { name: true, durationDays: true } },
+          uploadedBy: { select: { name: true, email: true } },
         },
       }),
       prisma.subscriptionPayment.count({ where }),

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Mail, Lock } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -10,7 +10,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('suspended') === '1') {
+      setError('Akun Anda ditangguhkan. Mohon chat admin.');
+    }
+  }, [location.search]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -20,6 +28,10 @@ export default function Login() {
       const data = await authService.login(email, password);
       // Gunakan AuthContext login — sync ke localStorage + state sekaligus
       login(data.token, data.user);
+      if (data.user.role === 'STAFF' && (!data.user.isEmailVerified || data.user.mustChangePassword)) {
+        navigate('/staff-onboarding');
+        return;
+      }
       // Redirect berdasarkan role: STAFF ke kasir, OWNER ke dashboard
       if (data.user.role === 'STAFF') {
         navigate('/cashier');
@@ -27,6 +39,16 @@ export default function Login() {
         navigate('/dashboard');
       }
     } catch (err) {
+      const code = err.response?.data?.code;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        const emailToVerify = err.response?.data?.email || email;
+        navigate(`/verify-email?email=${encodeURIComponent(emailToVerify)}`);
+        return;
+      }
+      if (code === 'BUSINESS_SUSPENDED' || code === 'BUSINESS_DELETED') {
+        setError('Akun Anda ditangguhkan. Mohon chat admin untuk informasi lebih lanjut.');
+        return;
+      }
       setError(err.response?.data?.message || 'Login gagal. Periksa email dan password Anda.');
     } finally {
       setLoading(false);
@@ -55,26 +77,37 @@ export default function Login() {
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
-            <input 
-              type="email" 
-              placeholder="nama@email.com" 
-              className="premium-input bg-slate-50"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-            />
+            <div className="relative group">
+              <input 
+                type="email" 
+                placeholder="nama@email.com" 
+                className="premium-input bg-slate-50 premium-input-icon"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+              />
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+            </div>
           </div>
           
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Katasandi</label>
-            <input 
-              type="password" 
-              placeholder="••••••••" 
-              className="premium-input bg-slate-50 select-all"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-            />
+            <div className="flex justify-between items-center mb-2 ml-1">
+              <label className="text-sm font-bold text-slate-500">Katasandi</label>
+              <Link to="/forgot-password" className="text-xs font-bold text-primary hover:underline">
+                Lupa Password?
+              </Link>
+            </div>
+            <div className="relative group">
+              <input 
+                type="password" 
+                placeholder="••••••••" 
+                className="premium-input bg-slate-50 premium-input-icon select-all"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+            </div>
           </div>
 
           <button 

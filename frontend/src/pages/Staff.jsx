@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, Search, Trash2, Edit2, Key, X, Check, Loader2 } from 'lucide-react';
+import { UserPlus, Search, Trash2, Edit2, X, Check, Loader2, User, Mail, Phone } from 'lucide-react';
 import api from '../lib/axios';
 import toast, { Toaster } from 'react-hot-toast';
+import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 export default function Staff() {
   const [staff, setStaff] = useState([]);
@@ -14,7 +15,9 @@ export default function Staff() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    password: ''
+    phone: '',
+    password: '',
+    confirmPassword: ''
   });
 
   const fetchStaff = async () => {
@@ -22,7 +25,7 @@ export default function Staff() {
     try {
       const res = await api.get('/staff');
       setStaff(res.data || []);
-    } catch (err) {
+    } catch {
       toast.error("Gagal memuat daftar staf");
     } finally {
       setLoading(false);
@@ -36,10 +39,10 @@ export default function Staff() {
   const handleOpenModal = (st = null) => {
     if (st) {
       setEditingStaff(st);
-      setFormData({ name: st.name, email: st.email, password: '' });
+      setFormData({ name: st.name, email: st.email, phone: st.phone || '', password: '', confirmPassword: '' });
     } else {
       setEditingStaff(null);
-      setFormData({ name: '', email: '', password: '' });
+      setFormData({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
     }
     setIsModalOpen(true);
   };
@@ -47,7 +50,7 @@ export default function Staff() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingStaff(null);
-    setFormData({ name: '', email: '', password: '' });
+    setFormData({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
   };
 
   const handleSubmit = async (e) => {
@@ -55,11 +58,50 @@ export default function Staff() {
     setFormLoading(true);
     try {
       if (editingStaff) {
+        if (formData.password) {
+          const policyErrors = getPasswordPolicyErrors(formData.password);
+          if (policyErrors.length > 0) {
+            toast.error(policyErrors[0]);
+            setFormLoading(false);
+            return;
+          }
+          if (!formData.confirmPassword) {
+            toast.error("Konfirmasi password wajib diisi");
+            setFormLoading(false);
+            return;
+          }
+          if (formData.password !== formData.confirmPassword) {
+            toast.error("Konfirmasi password tidak cocok");
+            setFormLoading(false);
+            return;
+          }
+        }
         await api.put(`/staff/${editingStaff.id}`, formData);
         toast.success("Data staf berhasil diperbarui");
       } else {
         if (!formData.password) {
           toast.error("Password wajib diisi untuk staf baru");
+          setFormLoading(false);
+          return;
+        }
+        const policyErrors = getPasswordPolicyErrors(formData.password);
+        if (policyErrors.length > 0) {
+          toast.error(policyErrors[0]);
+          setFormLoading(false);
+          return;
+        }
+        if (!formData.confirmPassword) {
+          toast.error("Konfirmasi password wajib diisi");
+          setFormLoading(false);
+          return;
+        }
+        if (formData.password !== formData.confirmPassword) {
+          toast.error("Konfirmasi password tidak cocok");
+          setFormLoading(false);
+          return;
+        }
+        if (!formData.phone) {
+          toast.error("Nomor WhatsApp staf wajib diisi");
           setFormLoading(false);
           return;
         }
@@ -81,7 +123,7 @@ export default function Staff() {
       await api.delete(`/staff/${id}`);
       toast.success("Staf berhasil dihapus");
       fetchStaff();
-    } catch (err) {
+    } catch {
       toast.error("Gagal menghapus staf");
     }
   };
@@ -113,7 +155,7 @@ export default function Staff() {
           <input 
             type="text" 
             placeholder="Cari nama atau email staf..." 
-            className="premium-input pl-12 bg-white"
+            className="premium-input bg-white premium-input-icon"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -208,41 +250,67 @@ export default function Staff() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Nama Lengkap</label>
-                  <input 
-                    required
-                    type="text" 
-                    className="premium-input bg-secondary"
-                    placeholder="Contoh: Budi Santoso"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  />
+                  <div className="relative group">
+                    <input 
+                      required
+                      type="text" 
+                      className="premium-input bg-secondary premium-input-icon"
+                      placeholder="Contoh: Budi Santoso"
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    />
+                    <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Email / Username</label>
-                  <input 
-                    required
-                    type="email" 
-                    className="premium-input bg-secondary"
-                    placeholder="budi@washpro.com"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  <div className="relative group">
+                    <input 
+                      required
+                      type="email" 
+                      className="premium-input bg-secondary premium-input-icon"
+                      placeholder="budi@washpro.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    />
+                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Nomor WhatsApp</label>
+                  <div className="relative group">
+                    <input
+                      required={!editingStaff}
+                      type="tel"
+                      className="premium-input bg-secondary premium-input-icon"
+                      placeholder="Contoh: 081234567890 / 628123..."
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    />
+                    <Phone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
+                  </div>
+                </div>
+                <div>
+                  <PasswordInput
+                    label={editingStaff ? 'Password Baru (Kosongkan jika tidak diubah)' : 'Password Awal'}
+                    value={formData.password}
+                    onChange={(v) => setFormData({ ...formData, password: v })}
+                    required={!editingStaff}
+                    showStrength
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                    {editingStaff ? 'Password Baru (Kosongkan jika tidak diubah)' : 'Password Awal'}
+                    {editingStaff ? 'Konfirmasi Password Baru' : 'Konfirmasi Password Awal'}
                   </label>
-                  <div className="relative">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      required={!editingStaff}
-                      type="password" 
-                      className="premium-input bg-secondary pl-12"
-                      placeholder="••••••••"
-                      value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    />
-                  </div>
+                  <input
+                    required={!editingStaff}
+                    type="password"
+                    className="premium-input bg-secondary"
+                    placeholder="Ulangi password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  />
                 </div>
               </div>
 

@@ -20,9 +20,15 @@ export default function Dashboard() {
   const [trend, setTrend] = useState([]);
   const [overdueTotal, setOverdueTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [chartsReady, setChartsReady] = useState(false);
 
   const [dateFilter, setDateFilter] = useState('hari_ini');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
+
+  useEffect(() => {
+    const t = setTimeout(() => setChartsReady(true), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -132,9 +138,9 @@ export default function Dashboard() {
             {trend.length} hari periode
           </span>
         </div>
-        <div className="h-64 sm:h-72 w-full">
-          {trend.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+        <div className="w-full min-w-0">
+          {chartsReady && trend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={288} minWidth={1} minHeight={1}>
               <AreaChart data={trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradRev" x1="0" y1="0" x2="0" y2="1">
@@ -158,7 +164,7 @@ export default function Dashboard() {
               <div className="w-16 h-16 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center">
                 <TrendingUp size={24} className="text-slate-400"/>
               </div>
-              <p className="font-bold">Belum ada pendapatan tercatat di periode ini</p>
+              <p className="font-bold">{chartsReady ? 'Belum ada pendapatan tercatat di periode ini' : 'Memuat grafik...'}</p>
             </div>
           )}
         </div>
@@ -171,9 +177,9 @@ export default function Dashboard() {
             <div className="p-2 bg-primary/10 rounded-lg text-primary"><TrendingUp size={20} /></div>
             Cash vs QRIS
           </h3>
-          <div className="h-64 sm:h-72 w-full relative">
-            {stats.paymentStats.length > 0 && (stats.paymentStats[0].value + stats.paymentStats[1].value) > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <div className="w-full min-w-0 relative">
+            {chartsReady && stats.paymentStats.length > 0 && (stats.paymentStats[0].value + stats.paymentStats[1].value) > 0 ? (
+              <ResponsiveContainer width="100%" height={288} minWidth={1} minHeight={1}>
                 <PieChart>
                   <Pie data={stats.paymentStats} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={6} dataKey="value" stroke="none">
                     {stats.paymentStats.map((entry, index) => (
@@ -185,11 +191,11 @@ export default function Dashboard() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3">
+              <div className="h-[288px] flex flex-col items-center justify-center text-slate-400 gap-3">
                 <div className="w-16 h-16 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center">
                   <FileText size={24} className="text-slate-400"/>
                 </div>
-                <p className="font-bold">Belum ada data transaksi tercatat</p>
+                <p className="font-bold">{chartsReady ? 'Belum ada data transaksi tercatat' : 'Memuat grafik...'}</p>
               </div>
             )}
           </div>

@@ -80,8 +80,7 @@ export default function Settings() {
       const res = settingsRes;
       if(res.data) {
         let staffMenus = ["CASHIER", "TRACKING"];
-        try { staffMenus = JSON.parse(res.data.staffAllowedMenus || '[]'); } catch(e) {}
-        const packageItems = res.data.membershipPackage?.items || [];
+        try { staffMenus = JSON.parse(res.data.staffAllowedMenus || '[]'); } catch { staffMenus = ["CASHIER", "TRACKING"]; }
         
         // Gabungkan template dari DB dengan default jika ada yang kosong
         const dbTemplates = res.data.whatsappTemplates || {};
@@ -552,9 +551,14 @@ const WhatsAppSettings = () => {
   };
 
   useEffect(() => {
-    fetchStatus();
+    const t = setTimeout(() => {
+      fetchStatus();
+    }, 0);
     const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(t);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleQR = async () => {
@@ -589,7 +593,7 @@ const WhatsAppSettings = () => {
       await api.post('/whatsapp/disconnect');
       setWaStatus(prev => ({ ...prev, status: 'disconnected' }));
       await fetchStatus();
-    } catch (e) {
+    } catch {
       alert("Gagal disconnect");
     }
     setLoading(false);

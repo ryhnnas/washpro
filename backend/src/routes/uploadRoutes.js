@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const authMiddleware = require('../middleware/auth');
-const requireSuperAdmin = require('../middleware/superAdminAuth');
+const jwt = require('jsonwebtoken');
 
 const UPLOADS_DIR = path.join(__dirname, '../../uploads/payments');
 
@@ -15,17 +14,29 @@ const UPLOADS_DIR = path.join(__dirname, '../../uploads/payments');
  * 1. User adalah tenant yang memiliki file tersebut (businessId cocok di filename)
  * 2. User adalah SuperAdmin
  */
-router.get('/payments/:filename', (req, res, next) => {
-  // Coba auth tenant dulu
-  authMiddleware(req, res, (err) => {
-    if (!err && req.user) return next();
-    // Jika gagal, coba superadmin auth
-    requireSuperAdmin(req, res, (err2) => {
-      if (!err2 && req.superAdmin) return next();
+router.get('/payments/:filename', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const headerToken = authHeader && authHeader.split(' ')[1];
+  const cookieToken = req.cookies?.auth_token;
+  const token = headerToken || cookieToken;
+
+  if (!token) return res.status(401).json({ message: 'Akses ditolak' });
+
+  let decoded = null;
+  try {
+    decoded = jwt.verify(token, process.env.SUPERADMIN_JWT_SECRET);
+    if (decoded?.role === 'SUPERADMIN') req.superAdmin = decoded;
+  } catch {}
+
+  if (!req.superAdmin) {
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+    } catch {
       return res.status(401).json({ message: 'Akses ditolak' });
-    });
-  });
-}, (req, res) => {
+    }
+  }
+
   const { filename } = req.params;
 
   // Sanitasi filename — hanya izinkan karakter aman
