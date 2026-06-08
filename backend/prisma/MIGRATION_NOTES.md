@@ -13,6 +13,10 @@ Tiga file migration pernah berisi output CLI `dotenvx` alih-alih SQL murni:
 
 File-file ini sudah diperbaiki agar **fresh deploy** dari database kosong dapat menjalankan `prisma migrate deploy`.
 
+## Migration SaaS (20260604120000)
+
+Tabel `SuperAdmin`, `SubscriptionPlan`, `SubscriptionPayment`, kolom subscription di `Business`, serta tabel WhatsApp sebelumnya hanya ada di `schema.prisma` (via `db push`) tanpa file migration. Migration `20260604120000_add_saas_subscription_system` menambahkan baseline tersebut agar migration berikutnya (mis. email verification yang `ALTER SubscriptionPayment`) tidak gagal di CI/fresh VPS.
+
 ## Penting: jangan edit migration yang sudah diterapkan
 
 Prisma menyimpan checksum setiap migration di tabel `_prisma_migrations`. Jika migration di atas **sudah pernah dijalankan** di lingkungan bersama (staging/production), mengubah isi file migration akan menyebabkan:
