@@ -34,6 +34,9 @@ const errorMiddleware = require('./middleware/errorMiddleware');
 
 const app = express();
 
+// Di belakang Caddy / Cloudflare / nginx — wajib untuk rate limit & cookie secure
+app.set('trust proxy', 1);
+
 // 1. Security Headers
 app.use(helmet({
   contentSecurityPolicy: {
