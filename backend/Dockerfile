@@ -6,7 +6,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json ./backend/
 
-RUN npm ci --workspace=backend --include-workspace-root
+# Schema belum di-copy — jangan postinstall prisma generate di sini
+RUN npm ci --workspace=backend --include-workspace-root --ignore-scripts
 
 COPY backend ./backend
 

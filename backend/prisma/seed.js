@@ -322,7 +322,7 @@ async function main() {
 
   console.log("\n✅ Seed selesai dengan sukses!");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`SuperAdmin : superadmin@washpro.local / ${superAdminPassword}`);
+  console.log(`SuperAdmin : superadminwashpro@ngetech.studio / ${superAdminPassword}`);
   console.log(`Owner  : owner@washpro.local / ${ownerPassword}`);
   console.log(`Staff  : staff@washpro.local / ${staffPassword}`);
   console.log(`Bisnis : ${business.name}`);
