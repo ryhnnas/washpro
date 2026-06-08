@@ -6,6 +6,7 @@
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
     "generate": "prisma generate",
+    "postinstall": "prisma generate",
     "db:seed": "prisma db seed",
     "test": "NODE_ENV=test jest --runInBand --forceExit",
     "test:watch": "NODE_ENV=test jest --watch"
