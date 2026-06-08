@@ -26,8 +26,7 @@ export default function Login() {
     setError('');
     try {
       const data = await authService.login(email, password);
-      // Gunakan AuthContext login — sync ke localStorage + state sekaligus
-      login(data.token, data.user);
+      login(data.user);
       if (data.user.role === 'STAFF' && (!data.user.isEmailVerified || data.user.mustChangePassword)) {
         navigate('/staff-onboarding');
         return;
@@ -69,42 +68,46 @@ export default function Login() {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm font-medium">
+          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm font-medium" role="alert" aria-live="polite">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-5">
+        <form onSubmit={handleLogin} className="space-y-5" aria-busy={loading}>
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
+            <label htmlFor="login-email" className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
             <div className="relative group">
-              <input 
-                type="email" 
-                placeholder="nama@email.com" 
+              <input
+                id="login-email"
+                type="email"
+                placeholder="nama@email.com"
                 className="premium-input bg-slate-50 premium-input-icon"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
               <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
             </div>
           </div>
-          
+
           <div>
             <div className="flex justify-between items-center mb-2 ml-1">
-              <label className="text-sm font-bold text-slate-500">Katasandi</label>
+              <label htmlFor="login-password" className="text-sm font-bold text-slate-500">Katasandi</label>
               <Link to="/forgot-password" className="text-xs font-bold text-primary hover:underline">
                 Lupa Password?
               </Link>
             </div>
             <div className="relative group">
-              <input 
-                type="password" 
-                placeholder="••••••••" 
+              <input
+                id="login-password"
+                type="password"
+                placeholder="••••••••"
                 className="premium-input bg-slate-50 premium-input-icon select-all"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
               />
               <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
             </div>

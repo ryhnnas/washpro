@@ -18,12 +18,12 @@ test.describe('Navigation & Layout (Owner)', () => {
     await expect(page.getByRole('link', { name: /dashboard/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /kasir/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /tracking/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /pelanggan/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /laporan/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Pelanggan', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Layanan', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Laporan', exact: true })).toBeVisible();
 
     // Administrasi (Owner only)
     await expect(page.getByRole('link', { name: /informasi langganan/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /daftar layanan/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /pengaturan menu/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /kelola staf/i })).toBeVisible();
   });

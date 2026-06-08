@@ -1,55 +1,40 @@
 import axios from 'axios';
 
-// Helper: baca cookie by name
 function getCookie(name) {
   const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
   return match ? decodeURIComponent(match[2]) : null;
 }
 
-// Konfigurasi default Axios
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Kirim cookies (httpOnly auth_token + csrf_token) di setiap request
+  withCredentials: true,
 });
 
-// Flag untuk mencegah multiple refresh requests bersamaan
 let isRefreshing = false;
 let failedQueue = [];
 
-const processQueue = (error, token = null) => {
+const processQueue = (error) => {
   failedQueue.forEach((prom) => {
     if (error) prom.reject(error);
-    else prom.resolve(token);
+    else prom.resolve();
   });
   failedQueue = [];
 };
 
-// Interceptor Request: Sisipkan CSRF token + fallback Authorization header
 api.interceptors.request.use(
   (config) => {
-    // CSRF token dari cookie (double-submit pattern)
     const csrfToken = getCookie('csrf_token');
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
     }
-
-    // Fallback: jika masih ada token di localStorage (backward compat / transisi)
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Interceptor Response: Handle token refresh, CSRF errors, subscription expired
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -59,12 +44,10 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const currentPath = window.location.pathname;
 
-    // 401: Access token expired → coba refresh
     if (status === 401 && !originalRequest._retry) {
-      // Jangan refresh jika ini sudah request ke /auth/refresh atau /auth/login
       if (originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/auth/login')) {
-        localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
         const publicPaths = ['/login', '/register', '/', '/superadmin/login'];
         if (!publicPaths.includes(currentPath)) {
           window.location.href = '/login';
@@ -73,11 +56,9 @@ api.interceptors.response.use(
       }
 
       if (isRefreshing) {
-        // Queue request sampai refresh selesai
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then(() => {
-          // Retry dengan CSRF token baru
           const csrfToken = getCookie('csrf_token');
           if (csrfToken) originalRequest.headers['X-CSRF-Token'] = csrfToken;
           return api(originalRequest);
@@ -89,24 +70,20 @@ api.interceptors.response.use(
 
       try {
         const refreshRes = await api.post('/auth/refresh');
-        const newToken = refreshRes.data?.token;
+        if (refreshRes.data?.user) {
+          localStorage.setItem('user', JSON.stringify(refreshRes.data.user));
+        }
 
-        // Update localStorage untuk backward compat
-        if (newToken) localStorage.setItem('token', newToken);
-        if (refreshRes.data?.user) localStorage.setItem('user', JSON.stringify(refreshRes.data.user));
+        processQueue(null);
 
-        processQueue(null, newToken);
-
-        // Retry original request
         const csrfToken = getCookie('csrf_token');
         if (csrfToken) originalRequest.headers['X-CSRF-Token'] = csrfToken;
-        if (newToken) originalRequest.headers.Authorization = `Bearer ${newToken}`;
 
         return api(originalRequest);
       } catch (refreshError) {
-        processQueue(refreshError, null);
-        localStorage.removeItem('token');
+        processQueue(refreshError);
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
         const publicPaths = ['/login', '/register', '/', '/superadmin/login'];
         if (!publicPaths.includes(currentPath)) {
           window.location.href = '/login';
@@ -117,7 +94,6 @@ api.interceptors.response.use(
       }
     }
 
-    // 403 dengan CSRF error → refresh CSRF token dan retry
     if (status === 403 && (data?.code === 'CSRF_MISSING' || data?.code === 'CSRF_INVALID') && !originalRequest._csrfRetry) {
       originalRequest._csrfRetry = true;
       try {
@@ -130,7 +106,6 @@ api.interceptors.response.use(
       }
     }
 
-    // 403 dengan subscriptionStatus: subscription issue → redirect ke paywall
     if (status === 403 && data?.subscriptionStatus) {
       if (data.subscriptionStatus === 'SUSPENDED') {
         localStorage.removeItem('token');

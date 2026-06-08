@@ -1,14 +1,8 @@
-const prisma = require('../config/prisma');
+const { DomainError } = require('../utils/domainError');
 
 /**
  * CATATAN PENTING — MEMBERSHIP COVERAGE CALCULATION
- * 
- * Logika calculateCoverage() di file ini adalah SOURCE OF TRUTH.
- * Frontend (frontend/src/pages/Cashier.jsx) memiliki preview calculation
- * yang harus SINKRON dengan logika di sini.
- * 
- * Jika ada perubahan di fungsi calculateCoverage(), update juga
- * useEffect membershipPreview di Cashier.jsx.
+ * Source of truth. Frontend Cashier preview harus sinkron dengan calculateCoverage().
  */
 
 const isMembershipActive = (membership) => {
@@ -17,24 +11,54 @@ const isMembershipActive = (membership) => {
   return new Date(membership.endAt) >= new Date();
 };
 
-const findActiveMembership = async (businessId, customerId) => {
+const findActiveMembership = async (businessId, customerId, tx = null) => {
   if (!customerId) return null;
-  const memberships = await prisma.customerMembership.findMany({
+  const client = tx || require('../config/prisma');
+  const memberships = await client.customerMembership.findMany({
     where: { businessId, customerId, status: 'ACTIVE' },
     orderBy: { createdAt: 'desc' },
     include: {
       balances: true,
-      template: {
-        include: {
-          quotaItems: true,
-        },
-      },
+      template: { include: { quotaItems: true } },
     },
     take: 3,
   });
   const active = memberships.find(isMembershipActive);
-  if (!active) return null;
-  return active;
+  return active || null;
+};
+
+const resolveOwnedActiveTemplate = async (tx, businessId, templateId) => {
+  let template;
+  if (templateId) {
+    template = await tx.membershipPackageTemplate.findFirst({
+      where: { id: templateId, businessId, isActive: true },
+      include: { quotaItems: true },
+    });
+    if (!template) {
+      throw new DomainError(404, 'MEMBERSHIP_TEMPLATE_NOT_FOUND', 'Template paket membership tidak ditemukan');
+    }
+  } else {
+    template = await tx.membershipPackageTemplate.findFirst({
+      where: { businessId, isActive: true },
+      include: { quotaItems: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!template) {
+      throw new DomainError(404, 'MEMBERSHIP_TEMPLATE_NOT_FOUND', 'Template paket membership tidak ditemukan');
+    }
+  }
+
+  if (template.quotaItems.length > 0) {
+    const serviceIds = [...new Set(template.quotaItems.map((q) => q.serviceId))];
+    const ownedCount = await tx.service.count({
+      where: { businessId, id: { in: serviceIds } },
+    });
+    if (ownedCount !== serviceIds.length) {
+      throw new DomainError(403, 'MEMBERSHIP_TEMPLATE_INVALID', 'Template mengandung layanan yang tidak valid untuk bisnis ini');
+    }
+  }
+
+  return template;
 };
 
 const calculateCoverage = ({ transactionQty, servicePrice, activeMembership, serviceId }) => {
@@ -91,10 +115,22 @@ const consumeQuotaAndLog = async ({
 }) => {
   if (!membershipId || usedQty <= 0) return;
 
-  await tx.customerMembershipQuotaBalance.updateMany({
-    where: { customerMembershipId: membershipId, serviceId },
+  const updated = await tx.customerMembershipQuotaBalance.updateMany({
+    where: {
+      customerMembershipId: membershipId,
+      serviceId,
+      remainingQty: { gte: usedQty },
+    },
     data: { remainingQty: { decrement: usedQty } },
   });
+
+  if (updated.count === 0) {
+    throw new DomainError(
+      409,
+      'MEMBERSHIP_QUOTA_CHANGED',
+      'Kuota membership berubah karena transaksi paralel. Muat ulang data pelanggan dan coba lagi.'
+    );
+  }
 
   await tx.customerMembershipUsageLog.create({
     data: {
@@ -109,36 +145,31 @@ const consumeQuotaAndLog = async ({
   });
 };
 
-const activateCustomerMembership = async ({ businessId, customerId, templateId, startAt = new Date(), tx = prisma }) => {
-  const [setting, activeTemplate] = await Promise.all([
-    tx.businessSetting.findUnique({ where: { businessId } }),
-    templateId 
-      ? tx.membershipPackageTemplate.findUnique({ 
-          where: { id: templateId }, 
-          include: { quotaItems: true } 
-        })
-      : tx.membershipPackageTemplate.findFirst({
-          where: { businessId, isActive: true },
-          include: { quotaItems: true },
-          orderBy: { createdAt: 'desc' },
-        }),
-  ]);
+const activateCustomerMembership = async ({
+  businessId,
+  customerId,
+  templateId,
+  startAt = new Date(),
+  tx,
+}) => {
+  const client = tx || require('../config/prisma');
 
-  if (!activeTemplate) {
-    throw new Error('Template paket membership tidak ditemukan.');
-  }
+  const [setting, activeTemplate] = await Promise.all([
+    client.businessSetting.findUnique({ where: { businessId } }),
+    resolveOwnedActiveTemplate(client, businessId, templateId),
+  ]);
 
   const durationDays = setting?.membershipDurationDays || activeTemplate.durationDays || 30;
   const startDate = new Date(startAt);
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + durationDays);
 
-  await tx.customerMembership.updateMany({
+  await client.customerMembership.updateMany({
     where: { businessId, customerId, status: 'ACTIVE' },
     data: { status: 'CANCELLED' },
   });
 
-  const membership = await tx.customerMembership.create({
+  const membership = await client.customerMembership.create({
     data: {
       businessId,
       customerId,
@@ -150,7 +181,7 @@ const activateCustomerMembership = async ({ businessId, customerId, templateId, 
   });
 
   if (activeTemplate.quotaItems.length > 0) {
-    await tx.customerMembershipQuotaBalance.createMany({
+    await client.customerMembershipQuotaBalance.createMany({
       data: activeTemplate.quotaItems.map((q) => ({
         customerMembershipId: membership.id,
         serviceId: q.serviceId,
@@ -165,8 +196,8 @@ const activateCustomerMembership = async ({ businessId, customerId, templateId, 
 
 module.exports = {
   findActiveMembership,
+  resolveOwnedActiveTemplate,
   calculateCoverage,
   consumeQuotaAndLog,
   activateCustomerMembership,
 };
-

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const rateLimit = require('express-rate-limit');
-const { registerOwner, login, updateProfile, changePassword, forgotPassword, verifyOtp, resetPassword, refreshAccessToken, verifyEmailOtp, resendEmailOtp } = require('../controllers/authController');
+const { registerOwner, login, getSession, updateProfile, changePassword, forgotPassword, verifyOtp, resetPassword, refreshAccessToken, verifyEmailOtp, resendEmailOtp } = require('../controllers/authController');
 const authMiddleware = require('../middleware/auth');
 const validate = require('../middleware/validator');
 const { registerSchema, loginSchema, updateProfileSchema, changePasswordSchema, forgotPasswordSchema, verifyOtpSchema, resetPasswordSchema, verifyEmailOtpSchema, resendEmailOtpSchema } = require('../schemas/authSchema');
@@ -40,6 +40,9 @@ router.post('/register', authLimiter, validate(registerSchema), registerOwner);
 
 // Jalur: /api/auth/login
 router.post('/login', authLimiter, validate(loginSchema), login);
+
+// Jalur: /api/auth/me — session check via httpOnly cookie
+router.get('/me', authMiddleware, getSession);
 
 // Jalur: /api/auth/profile
 router.put('/profile', authMiddleware, validate(updateProfileSchema), updateProfile);

@@ -2,7 +2,8 @@ const prisma = require('../config/prisma');
 const whatsappService = require('../services/whatsappService');
 const membershipService = require('../services/membershipService');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
-const { sendError } = require('../utils/errorResponse');
+const { sendError, handleControllerError } = require('../utils/errorResponse');
+const { DomainError } = require('../utils/domainError');
 
 const getTransactions = async (req, res) => {
   try {
@@ -85,13 +86,12 @@ const createTransaction = async (req, res) => {
     serviceName,
     serviceId,
     weight,
-    totalPrice,
     paymentMethod,
     items,
+    // totalPrice — deprecated, diabaikan; backend selalu menghitung dari database
   } = req.body;
   try {
     const businessId = req.user.businessId;
-    const total = parseInt(totalPrice, 10);
 
     const transaction = await prisma.$transaction(async (tx) => {
       let customer = null;
@@ -133,14 +133,18 @@ const createTransaction = async (req, res) => {
         }))
         .filter((item) => item.qty && item.qty > 0);
 
-      if (normalizedItems.length === 0) throw new Error('Minimal satu rincian layanan wajib diisi');
+      if (normalizedItems.length === 0) {
+        throw new DomainError(400, 'INVALID_TRANSACTION_ITEMS', 'Minimal satu rincian layanan wajib diisi');
+      }
 
       const selectedServices = await Promise.all(
         normalizedItems.map(async (item) => {
           let svc = null;
           if (item.serviceId) svc = await tx.service.findFirst({ where: { id: item.serviceId, businessId } });
           if (!svc && item.serviceName) svc = await tx.service.findFirst({ where: { name: item.serviceName, businessId } });
-          if (!svc) throw new Error(`Layanan tidak ditemukan: ${item.serviceName || item.serviceId}`);
+          if (!svc) {
+            throw new DomainError(404, 'SERVICE_NOT_FOUND', `Layanan tidak ditemukan: ${item.serviceName || item.serviceId}`);
+          }
           return { service: svc, qty: item.qty };
         })
       );
@@ -153,7 +157,7 @@ const createTransaction = async (req, res) => {
       });
       const serviceEntries = Array.from(mergedByService.values());
 
-      const activeMembership = await membershipService.findActiveMembership(businessId, customer?.id);
+      const activeMembership = await membershipService.findActiveMembership(businessId, customer?.id, tx);
       const itemBreakdowns = serviceEntries.map(({ service, qty }) => {
         const coverage = membershipService.calculateCoverage({
           transactionQty: qty,
@@ -184,9 +188,6 @@ const createTransaction = async (req, res) => {
       const computedTotal = itemBreakdowns.reduce((sum, x) => sum + x.lineTotal, 0);
       const computedCovered = itemBreakdowns.reduce((sum, x) => sum + x.coveredAmount, 0);
       const computedPayable = itemBreakdowns.reduce((sum, x) => sum + x.payableAmount, 0);
-      const finalTotal = Number.isFinite(total) ? total : computedTotal;
-      const normalizedCovered = Math.min(finalTotal, computedCovered);
-      const payable = Math.max(0, finalTotal - normalizedCovered);
       const maxEstimateHours = itemBreakdowns.reduce((max, item) => {
         const hours = item.estimateUnit === 'DAY' ? item.estimateValue * 24 : item.estimateValue;
         return Math.max(max, hours || 24);
@@ -217,9 +218,9 @@ const createTransaction = async (req, res) => {
             coveredAmount: item.coveredAmount,
             payableAmount: item.payableAmount,
           })),
-          totalPrice: finalTotal,
-          coveredAmount: normalizedCovered,
-          payableAmount: payable,
+          totalPrice: computedTotal,
+          coveredAmount: computedCovered,
+          payableAmount: computedPayable,
           estimatedCompletionAt,
           isOverdue: false,
           paymentMethod: paymentMethod || 'CASH',
@@ -249,14 +250,13 @@ const createTransaction = async (req, res) => {
           activeMembershipId: activeMembership?.id || null,
           reason: itemBreakdowns.some((i) => i.isUsingMembership) ? 'ITEM_LEVEL_COVERAGE' : 'NO_MEMBERSHIP',
           usedQty: itemBreakdowns.reduce((sum, x) => sum + (x.usedQty || 0), 0),
-          coveredAmount: normalizedCovered,
-          payableAmount: payable,
+          coveredAmount: computedCovered,
+          payableAmount: computedPayable,
           items: itemBreakdowns,
         },
       };
     });
 
-    // Kirim nota digital otomatis via GOWA. Tidak menghalangi response bila gagal.
     let waResult = { ok: false, skipped: true };
     if (transaction.customerPhone) {
       // Cek setting apakah status PENDING diperbolehkan kirim WA
@@ -278,7 +278,7 @@ const createTransaction = async (req, res) => {
 
     res.status(201).json({ ...transaction, whatsapp: waResult });
   } catch (error) {
-    sendError(res, error, 500, 'Gagal menyimpan transaksi');
+    handleControllerError(res, error, 'Gagal menyimpan transaksi');
   }
 };
 

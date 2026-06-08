@@ -53,7 +53,7 @@ export function AppProvider({ children }) {
       setSettings(null);
       setSubscription(null);
     }
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, fetchSettings, fetchSubscription]);
 
   return (
     <AppContext.Provider value={{

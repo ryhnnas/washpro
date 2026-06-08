@@ -67,9 +67,6 @@ const sendEmailVerificationOtp = async ({ userId, email, name }) => {
   return { ok: true };
 };
 
-/**
- * Helper: Generate refresh token, hash it, store in DB.
- */
 const createRefreshToken = async (userId, userAgent) => {
   const token = crypto.randomBytes(40).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -117,6 +114,29 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
   setCsrfCookie(res, csrfToken);
 };
 
+const buildAccessToken = (user) =>
+  jwt.sign(
+    {
+      id: user.id,
+      businessId: user.businessId,
+      role: user.role,
+      sessionVersion: user.sessionVersion ?? 0,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
+  );
+
+const revokeAllUserSessions = async (tx, userId) => {
+  await tx.user.update({
+    where: { id: userId },
+    data: { sessionVersion: { increment: 1 } },
+  });
+  await tx.refreshToken.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+};
+
 // LOGIC REGISTER
 const registerOwner = async (req, res) => {
   const { businessName, ownerName, email, password, phone } = req.body;
@@ -155,7 +175,6 @@ const registerOwner = async (req, res) => {
           allowStaffDashboard: false,
           allowStaffServices: false,
           allowStaffReports: false,
-          allowStaffSettings: false
         }
       });
 
@@ -234,18 +253,11 @@ const login = async (req, res) => {
       });
     }
 
-    // Generate short-lived access token
-    const accessToken = jwt.sign(
-      { id: user.id, businessId: user.businessId, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
-    );
+    const accessToken = buildAccessToken(user);
 
-    // Generate long-lived refresh token
     const userAgent = req.headers['user-agent'];
     const { token: refreshToken } = await createRefreshToken(user.id, userAgent);
 
-    // Set httpOnly cookies
     setAuthCookies(res, accessToken, refreshToken);
 
     res.json({
@@ -261,6 +273,20 @@ const login = async (req, res) => {
         mustChangePassword: user.mustChangePassword,
       }
     });
+  } catch (error) {
+    sendError(res, error, 500);
+  }
+};
+
+// GET SESSION — validasi cookie auth, return profil user
+const getSession = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, name: true, email: true, role: true, businessId: true, phone: true, isEmailVerified: true, mustChangePassword: true },
+    });
+    if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
+    res.json({ user });
   } catch (error) {
     sendError(res, error, 500);
   }
@@ -331,12 +357,15 @@ const changePassword = async (req, res) => {
     if (!isMatch) return res.status(401).json({ message: "Password lama salah" });
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: userId },
-      data: { password: hashedPassword, mustChangePassword: false },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword, mustChangePassword: false },
+      });
+      await revokeAllUserSessions(tx, userId);
     });
 
-    res.json({ message: "Password berhasil diubah" });
+    res.json({ message: 'Password berhasil diubah. Silakan login ulang di semua perangkat.' });
   } catch (error) {
     sendError(res, error, 500);
   }
@@ -475,23 +504,22 @@ const resetPassword = async (req, res) => {
 
     // Update password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await prisma.$transaction([
-      prisma.user.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
         where: { id: payload.userId },
         data: { password: hashedPassword },
-      }),
-      // Tandai OTP sebagai sudah dipakai
-      prisma.passwordResetOtp.update({
+      });
+      await revokeAllUserSessions(tx, payload.userId);
+      await tx.passwordResetOtp.update({
         where: { id: payload.otpId },
         data: { usedAt: new Date() },
-      }),
-      // Hapus semua OTP lama untuk user ini
-      prisma.passwordResetOtp.deleteMany({
+      });
+      await tx.passwordResetOtp.deleteMany({
         where: { userId: payload.userId, id: { not: payload.otpId } },
-      }),
-    ]);
+      });
+    });
 
-    res.json({ message: "Password berhasil direset. Silakan login dengan password baru." });
+    res.json({ message: 'Password berhasil direset. Silakan login dengan password baru.' });
   } catch (error) {
     sendError(res, error, 500);
   }
@@ -528,12 +556,7 @@ const refreshAccessToken = async (req, res) => {
 
     const user = storedToken.user;
 
-    // Generate new access token
-    const accessToken = jwt.sign(
-      { id: user.id, businessId: user.businessId, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
-    );
+    const accessToken = buildAccessToken(user);
 
     // Set new access token cookie + refresh CSRF
     const isProduction = process.env.NODE_ENV === 'production';
@@ -650,6 +673,7 @@ const resendEmailOtp = async (req, res) => {
 module.exports = {
   registerOwner,
   login,
+  getSession,
   updateProfile,
   changePassword,
   forgotPassword,

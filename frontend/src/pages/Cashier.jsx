@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Send, Save, User, Package, Calendar, Search, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import api from '../lib/axios';
 import { useApp } from '../context/AppContext';
@@ -71,19 +71,19 @@ export default function Cashier() {
      setShowSuggestions(false);
   };
 
-  const itemRows = formData.items || [];
-  const selectedItems = itemRows
+  const selectedItems = useMemo(() => (formData.items || [])
     .map((row) => {
       const service = services.find((s) => s.id === row.serviceId);
       const qty = parseFloat(row.qty);
       return service && qty > 0 ? { service, qty } : null;
     })
-    .filter(Boolean);
-  const matchedCustomer = customers.find(
+    .filter(Boolean), [formData.items, services]);
+  const itemRows = formData.items || [];
+  const matchedCustomer = useMemo(() => customers.find(
     (c) =>
       (formData.customerPhone && c.phone === formData.customerPhone) ||
       (!formData.customerPhone && c.name?.toLowerCase() === formData.customerName?.toLowerCase())
-  );
+  ), [customers, formData.customerPhone, formData.customerName]);
 
   useEffect(() => {
     if (selectedItems.length > 0) {
@@ -104,7 +104,7 @@ export default function Cashier() {
       setTotalPrice(0);
       setEndDate('');
     }
-  }, [formData.items, services]);
+  }, [selectedItems]);
 
   useEffect(() => {
     if (!selectedItems.length || !matchedCustomer?.membership?.isActive) {
@@ -154,7 +154,7 @@ export default function Cashier() {
       payableAmount,
       items: itemPreview,
     });
-  }, [formData.items, matchedCustomer?.id, settings]);
+  }, [selectedItems, matchedCustomer, settings]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -220,7 +220,21 @@ export default function Cashier() {
       const resCust = await api.get('/customers?limit=100');
       setCustomers(resCust.data.data || []);
     } catch (err) {
-      setFeedback({ type: 'error', message: err.response?.data?.error || 'Gagal menyimpan transaksi' });
+      const code = err.response?.data?.code;
+      if (err.response?.status === 409 && code === 'MEMBERSHIP_QUOTA_CHANGED') {
+        try {
+          const resCust = await api.get('/customers?limit=100');
+          setCustomers(resCust.data.data || []);
+        } catch {
+          /* ignore reload failure */
+        }
+        setFeedback({
+          type: 'warning',
+          message: 'Kuota membership berubah karena transaksi paralel. Data pelanggan dimuat ulang — silakan konfirmasi ulang transaksi.',
+        });
+      } else {
+        setFeedback({ type: 'error', message: err.response?.data?.message || err.response?.data?.error || 'Gagal menyimpan transaksi' });
+      }
     } finally {
       setLoading(false);
     }
@@ -254,7 +268,10 @@ export default function Cashier() {
       </div>
 
       {feedback && (
-        <div className={`mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg sm:rounded-2xl border text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 ${
+        <div
+          role="status"
+          aria-live="polite"
+          className={`mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg sm:rounded-2xl border text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 ${
           feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
           feedback.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
           'bg-rose-50 border-rose-200 text-rose-800'

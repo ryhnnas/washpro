@@ -16,9 +16,7 @@ export default function SuperAdminLogin() {
     setLoading(true);
     setError('');
     try {
-      const res = await superAdminApi.post('/superadmin/login', { email, password });
-      localStorage.setItem('superadmin_token', res.data.token);
-      localStorage.setItem('superadmin_user', JSON.stringify(res.data.admin));
+      await superAdminApi.post('/superadmin/login', { email, password });
       navigate('/superadmin/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Login gagal. Periksa email dan password.');
@@ -42,7 +40,7 @@ export default function SuperAdminLogin() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-slate-400 text-sm font-medium mb-1.5">Email</label>
+              <label htmlFor="superadmin-email" className="block text-slate-400 text-sm font-medium mb-1.5">Email</label>
               <input
                 id="superadmin-email"
                 type="email"
@@ -55,7 +53,7 @@ export default function SuperAdminLogin() {
             </div>
 
             <div>
-              <label className="block text-slate-400 text-sm font-medium mb-1.5">Password</label>
+              <label htmlFor="superadmin-password" className="block text-slate-400 text-sm font-medium mb-1.5">Password</label>
               <div className="relative">
                 <input
                   id="superadmin-password"
@@ -66,14 +64,14 @@ export default function SuperAdminLogin() {
                   required
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400 transition-colors"
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}>
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-3 text-red-300 text-sm">
+              <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-3 text-red-300 text-sm" role="alert" aria-live="polite">
                 {error}
               </div>
             )}

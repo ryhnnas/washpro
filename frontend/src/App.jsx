@@ -1,58 +1,66 @@
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { isTokenValid } from './utils/tokenHelper';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import PageSkeleton from './components/PageSkeleton';
+import MainLayout from './layouts/MainLayout';
+import superAdminApi from './lib/superAdminAxios';
 import { Toaster } from 'react-hot-toast';
+
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
-import MainLayout from './layouts/MainLayout';
-import Paywall from './pages/Paywall';
-import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
-import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import NotFound from './pages/NotFound';
+import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import StaffOnboarding from './pages/StaffOnboarding';
 
-// Halaman-halaman Tenant
-import Dashboard from './pages/Dashboard';
-import Cashier from './pages/Cashier';
-import Tracking from './pages/Tracking';
-import Reports from './pages/Reports';
-import Settings from './pages/Settings';
-import Services from './pages/Services';
-import Customers from './pages/Customers';
-import Staff from './pages/Staff';
-import Profile from './pages/Profile';
-import SubscriptionInfo from './pages/SubscriptionInfo';
+const Paywall = lazy(() => import('./pages/Paywall'));
+const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Cashier = lazy(() => import('./pages/Cashier'));
+const Tracking = lazy(() => import('./pages/Tracking'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Services = lazy(() => import('./pages/Services'));
+const Customers = lazy(() => import('./pages/Customers'));
+const Staff = lazy(() => import('./pages/Staff'));
+const Profile = lazy(() => import('./pages/Profile'));
+const SubscriptionInfo = lazy(() => import('./pages/SubscriptionInfo'));
 
-// Guard: Tenant harus login (validates JWT expiry)
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  if (!token) return <Navigate to="/login" />;
-  if (!isTokenValid(token)) {
-    localStorage.removeItem('token');
-    return <Navigate to="/login" />;
-  }
-  try {
-    const stored = localStorage.getItem('user');
-    const u = stored ? JSON.parse(stored) : null;
-    if (u?.role === 'STAFF' && (!u.isEmailVerified || u.mustChangePassword)) {
-      if (window.location.pathname !== '/staff-onboarding') {
-        return <Navigate to="/staff-onboarding" />;
-      }
-    }
-  } catch { void 0; }
+const AuthOnlyRoute = ({ children }) => {
+  const { user, isAuthLoading } = useAuth();
+  if (isAuthLoading) return <PageSkeleton />;
+  if (!user) return <Navigate to="/login" />;
   return children;
 };
 
-// Guard: SuperAdmin harus login
+const ProtectedRoute = ({ children }) => {
+  const { user, isAuthLoading } = useAuth();
+  if (isAuthLoading) return <PageSkeleton />;
+  if (!user) return <Navigate to="/login" />;
+  if (user.role === 'STAFF' && (!user.isEmailVerified || user.mustChangePassword)) {
+    return <Navigate to="/staff-onboarding" replace />;
+  }
+  return children;
+};
+
 const SuperAdminRoute = ({ children }) => {
-  const token = localStorage.getItem('superadmin_token');
-  if (!token) return <Navigate to="/superadmin/login" />;
+  const [checking, setChecking] = useState(true);
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    superAdminApi.get('/superadmin/me')
+      .then(() => setAuthed(true))
+      .catch(() => setAuthed(false))
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return <PageSkeleton />;
+  if (!authed) return <Navigate to="/superadmin/login" />;
   return children;
 };
 
@@ -63,41 +71,38 @@ function App() {
         <ErrorBoundary>
           <Router>
             <Toaster position="top-center" reverseOrder={false} />
-            <Routes>
-              {/* Public */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/verify-email" element={<VerifyEmail />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
+            <Suspense fallback={<PageSkeleton />}>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* SuperAdmin Portal */}
-              <Route path="/superadmin/login" element={<SuperAdminLogin />} />
-              <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
-              <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" />} />
+                <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+                <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
+                <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" />} />
 
-              {/* Paywall (butuh login tenant, tapi di luar MainLayout agar tidak ada sidebar) */}
-              <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
-              <Route path="/staff-onboarding" element={<ProtectedRoute><StaffOnboarding /></ProtectedRoute>} />
+                <Route path="/paywall" element={<ProtectedRoute><Paywall /></ProtectedRoute>} />
+                <Route path="/staff-onboarding" element={<AuthOnlyRoute><StaffOnboarding /></AuthOnlyRoute>} />
 
-              {/* Dashboard POS di dalam MainLayout */}
-              <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/cashier" element={<Cashier />} />
-                <Route path="/customers" element={<Customers />} />
-                <Route path="/tracking" element={<Tracking />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/services" element={<Services />} />
-                <Route path="/staff" element={<Staff />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/subscription" element={<SubscriptionInfo />} />
-              </Route>
+                <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/cashier" element={<Cashier />} />
+                  <Route path="/customers" element={<Customers />} />
+                  <Route path="/tracking" element={<Tracking />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/services" element={<Services />} />
+                  <Route path="/staff" element={<Staff />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/subscription" element={<SubscriptionInfo />} />
+                </Route>
 
-              {/* 404 — catch-all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </Router>
         </ErrorBoundary>
       </AppProvider>

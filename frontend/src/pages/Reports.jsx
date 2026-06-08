@@ -1,17 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { FileSpreadsheet, Search, ChevronLeft, ChevronRight, DollarSign, FileText, Loader2, TrendingUp } from 'lucide-react';
 import api from '../lib/axios';
-import DateFilter, { getDateRange } from '../components/DateFilter';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import DateFilter from '../components/DateFilter';
+import { getDateRange } from '../utils/dateRange';
 import toast, { Toaster } from 'react-hot-toast';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
-import { Chart, registerables } from 'chart.js';
-Chart.register(...registerables);
 
 export default function Reports() {
   const [transactions, setTransactions] = useState([]);
@@ -72,7 +68,7 @@ export default function Reports() {
       }
     };
     fetchData();
-  }, [page, debouncedSearch, dateFilter, customDate.start, customDate.end]);
+  }, [page, debouncedSearch, dateFilter, customDate]);
 
   // ==================== FUNGSI EXPORT PDF (SUDAH DIPERBAIKI) ====================
   const exportToPDF = async () => {
@@ -80,6 +76,12 @@ export default function Reports() {
     const toastId = toast.loading('Membuat Laporan PDF...');
 
     try {
+      const [{ jsPDF }, , html2canvas] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+        import('html2canvas'),
+      ]);
+
       const { startDate, endDate } = getDateRange(dateFilter, customDate);
       const res = await api.get(`/transactions/export?search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
       const { transactions, summary, serviceBreakdown, business } = res.data;
@@ -87,7 +89,6 @@ export default function Reports() {
       const doc = new jsPDF();
       const businessName = business?.name || 'WashPro Laundry';
 
-      // Header
       doc.setFontSize(22);
       doc.setTextColor(26, 54, 93);
       doc.text(businessName, 14, 20);
@@ -97,7 +98,6 @@ export default function Reports() {
       doc.setFontSize(10);
       doc.text(`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}`, 14, 36);
 
-      // Summary
       doc.setFontSize(11);
       doc.setTextColor(0);
       doc.setFont('helvetica', 'bold');
@@ -113,90 +113,23 @@ export default function Reports() {
 
       let currentY = doc.lastAutoTable.finalY + 15;
 
-      // Visualisasi
-      doc.setFont('helvetica', 'bold');
-      doc.text('VISUALISASI PERFORMA', 14, currentY);
-
-      // Fungsi buat chart image langsung dari data, tanpa DOM (Headless)
-      const generateChartImage = (type, data, options = {}) => {
-        return new Promise((resolve) => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 1200; // High res
-          canvas.height = 600;
-
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          const chart = new Chart(ctx, {
-            type,
-            data,
-            options: {
-              responsive: false,
-              animation: false,
-              devicePixelRatio: 2,
-              plugins: { 
-                legend: { display: true, labels: { font: { weight: 'bold', size: 14 } } } 
-              },
-              ...options,
-            },
-          });
-
-          // Tunggu sebentar agar render selesai
-          setTimeout(() => {
-            resolve(canvas.toDataURL('image/png', 1.0));
-            chart.destroy();
-          }, 150);
-        });
+      const captureChart = async (ref) => {
+        if (!ref?.current) return null;
+        const canvas = await html2canvas.default(ref.current, { scale: 2, backgroundColor: '#ffffff' });
+        return canvas.toDataURL('image/png', 1.0);
       };
 
-      // Generate chart images dari data state yang sudah ada secara paralel
+      doc.setFont('helvetica', 'bold');
+      doc.text('VISUALISASI PERFORMA', 14, currentY);
+      currentY += 10;
+
       const [lineImg, pieImg, barImg] = await Promise.all([
-        generateChartImage('line', {
-          labels: dailyRevenue.map(d => d.date),
-          datasets: [{
-            label: 'Pendapatan',
-            data: dailyRevenue.map(d => d.revenue),
-            borderColor: '#1A365D',
-            backgroundColor: 'rgba(26,54,93,0.1)',
-            borderWidth: 3,
-            tension: 0.4,
-            fill: true,
-            pointRadius: 4,
-          }]
-        }, {
-          scales: {
-            y: { ticks: { font: { weight: 'bold' }, callback: v => `Rp ${v.toLocaleString('id-ID')}` } },
-            x: { ticks: { font: { weight: 'bold' } } }
-          }
-        }),
-
-        generateChartImage('doughnut', {
-          labels: statusBreakdown.map(s => s.status),
-          datasets: [{
-            data: statusBreakdown.map(s => s.count),
-            backgroundColor: ['#1A365D', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'],
-          }]
-        }),
-
-        generateChartImage('bar', {
-          labels: topServices.map(s => s.name),
-          datasets: [{
-            label: 'Pendapatan',
-            data: topServices.map(s => s.totalRevenue),
-            backgroundColor: '#10B981',
-            borderRadius: 6,
-          }]
-        }, {
-          scales: {
-            y: { ticks: { font: { weight: 'bold' }, callback: v => `Rp ${v.toLocaleString('id-ID')}` } },
-            x: { ticks: { font: { weight: 'bold' } } }
-          }
-        })
+        captureChart(lineChartRef),
+        captureChart(pieChartRef),
+        captureChart(barChartRef),
       ]);
 
       if (lineImg || pieImg) {
-        currentY += 10;
         if (lineImg) doc.addImage(lineImg, 'PNG', 14, currentY, 95, 55);
         if (pieImg) doc.addImage(pieImg, 'PNG', 115, currentY, 80, 55);
         currentY += 65;
@@ -207,7 +140,6 @@ export default function Reports() {
         currentY += 75;
       }
 
-      // Top Layanan
       doc.setFont('helvetica', 'bold');
       doc.text('TOP 5 LAYANAN TERLARIS', 14, currentY);
       doc.autoTable({
@@ -218,7 +150,6 @@ export default function Reports() {
         headStyles: { fillColor: [16, 185, 129] },
       });
 
-      // Daftar Transaksi
       doc.addPage();
       doc.setFontSize(14);
       doc.setTextColor(26, 54, 93);
@@ -238,7 +169,6 @@ export default function Reports() {
         styles: { fontSize: 9 },
       });
 
-      // Footer
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -258,11 +188,11 @@ export default function Reports() {
     }
   };
 
-  // Export Excel (tetap sama)
   const exportToExcel = async () => {
     setExportLoading(true);
     const toastId = toast.loading('Membuat File Excel...');
     try {
+      const XLSX = await import('xlsx');
       const { startDate, endDate } = getDateRange(dateFilter, customDate);
       const res = await api.get(`/transactions/export?search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
       const { transactions, summary } = res.data;
@@ -282,7 +212,7 @@ export default function Reports() {
         Tanggal: new Date(t.startDate).toLocaleDateString('id-ID'),
         Pelanggan: t.customerName,
         Layanan: t.serviceName,
-        Total: t.totalPrice,
+        Total: t.payableAmount ?? t.totalPrice,
         Status: t.status,
         Metode: t.paymentMethod
       }));

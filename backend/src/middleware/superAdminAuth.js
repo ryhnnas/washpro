@@ -2,12 +2,13 @@ const jwt = require('jsonwebtoken');
 
 /**
  * Middleware: Validasi token JWT khusus SuperAdmin.
- * Token SuperAdmin dibuat dengan payload { id, role: 'SUPERADMIN' }
- * menggunakan SUPERADMIN_JWT_SECRET yang terpisah dari tenant JWT_SECRET.
+ * Prioritas: httpOnly cookie, fallback Authorization header (API client).
  */
 const requireSuperAdmin = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const headerToken = authHeader && authHeader.split(' ')[1];
+  const cookieToken = req.cookies?.superadmin_token;
+  const token = cookieToken || headerToken;
 
   if (!token) return res.status(401).json({ message: 'Akses ditolak, token superadmin tidak ada' });
 
@@ -24,6 +25,10 @@ const requireSuperAdmin = (req, res, next) => {
     req.superAdmin = verified;
     next();
   } catch (err) {
+    if (cookieToken && !headerToken) {
+      res.clearCookie('superadmin_token', { path: '/' });
+      res.clearCookie('csrf_token', { path: '/' });
+    }
     res.status(403).json({ message: 'Token superadmin tidak valid' });
   }
 };

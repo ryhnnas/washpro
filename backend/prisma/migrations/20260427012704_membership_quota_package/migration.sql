@@ -1,4 +1,3 @@
-◇ injected env (9) from ../.env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
 -- AlterTable
 ALTER TABLE `BusinessSetting` DROP COLUMN `membership_gold_min`,
     DROP COLUMN `membership_silver_min`,

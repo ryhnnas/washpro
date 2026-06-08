@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  DATABASE_URL: mysql://root:root@127.0.0.1:3306/washpro_ci
+  JWT_SECRET: ci-test-jwt-secret
+  SUPERADMIN_JWT_SECRET: ci-test-superadmin-secret
+  GOWA_ENABLED: 'false'
+  NODE_ENV: test
+
+jobs:
+  backend:
+    name: Backend — migrate, seed, test
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: washpro_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prisma migrate deploy
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Seed test database
+        working-directory: backend
+        run: npm run db:seed
+
+      - name: Run unit & integration tests
+        working-directory: backend
+        run: npm test
+
+  migration-upgrade:
+    name: Backend — migration upgrade check
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: washpro_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate upgrade from pre-hardening schema
+        working-directory: backend
+        run: bash scripts/migration-upgrade-check.sh
+
+  frontend:
+    name: Frontend — lint & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint (zero warnings)
+        run: npm run lint --workspace=frontend -- --max-warnings=0
+
+      - name: Production build
+        run: npm run build --workspace=frontend
+        env:
+          VITE_API_URL: http://localhost:5000/api
+
+  e2e:
+    name: E2E — Playwright Chromium
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: washpro_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Prepare isolated test database
+        working-directory: backend
+        run: |
+          npx prisma migrate deploy
+          npx prisma db push --accept-data-loss
+          npm run db:seed
+
+      - name: Run Playwright E2E
+        env:
+          CI: 'true'
+          DATABASE_URL: mysql://root:root@127.0.0.1:3306/washpro_ci
+          JWT_SECRET: ci-test-jwt-secret
+          SUPERADMIN_JWT_SECRET: ci-test-superadmin-secret
+          GOWA_ENABLED: 'false'
+          DISABLE_RATE_LIMIT: 'true'
+          PORT: '5001'
+          VITE_API_URL: http://localhost:5001/api
+        run: npx playwright test

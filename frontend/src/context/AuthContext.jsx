@@ -4,44 +4,51 @@ import { authService } from '../services/authService';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
-  // Fetch CSRF token on app init (sets cookie for subsequent requests)
   useEffect(() => {
-    authService.initCsrf();
+    const bootstrapSession = async () => {
+      await authService.initCsrf();
+      try {
+        const session = await authService.getSession();
+        setUser(session.user);
+        localStorage.setItem('user', JSON.stringify(session.user));
+      } catch {
+        try {
+          const refreshed = await authService.refreshSession();
+          setUser(refreshed.user);
+          localStorage.setItem('user', JSON.stringify(refreshed.user));
+        } catch {
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          setUser(null);
+        }
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    bootstrapSession();
   }, []);
 
-  const login = useCallback((token, userData) => {
-    // Token masih disimpan di localStorage untuk backward compat (misal mobile app)
-    // Tapi browser utama menggunakan httpOnly cookie yang di-set oleh server
-    localStorage.setItem('token', token);
+  const login = useCallback((userData) => {
+    localStorage.removeItem('token');
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   }, []);
 
   const logout = useCallback(async () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
     setUser(null);
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
     try {
       await authService.logout();
     } catch {
-      // Fallback: redirect even if server call fails
       window.location.href = '/';
     }
   }, []);
 
-  /**
-   * Update sebagian data user (misal setelah update profil).
-   * Sync ke localStorage sekaligus.
-   */
   const updateUser = useCallback((updates) => {
     setUser((prev) => {
       const updated = { ...prev, ...updates };
@@ -51,7 +58,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthLoading, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -7,6 +7,7 @@ const createTransactionSchema = z.object({
   serviceName: z.string().optional(),
   serviceId: z.string().optional(),
   weight: z.number().positive("Berat/jumlah harus lebih dari 0").optional(),
+  /** @deprecated Diabaikan server — backend selalu menghitung dari database */
   totalPrice: z.number().nonnegative("Total harga tidak boleh negatif").optional(),
   paymentMethod: z.enum(['CASH', 'QRIS']).default('CASH'),
   items: z.array(z.object({

@@ -5,6 +5,7 @@ const whatsappService = require('../services/whatsappService');
 const emailService = require('../services/emailService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 const { sendError } = require('../utils/errorResponse');
+const { generateCsrfToken, setCsrfCookie } = require('../middleware/csrf');
 
 // ==================== LOGIN ====================
 const login = async (req, res) => {
@@ -27,9 +28,20 @@ const login = async (req, res) => {
       { expiresIn: '8h' }
     );
 
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.cookie('superadmin_token', token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? 'strict' : 'lax',
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    const csrfToken = generateCsrfToken();
+    setCsrfCookie(res, csrfToken);
+
     res.json({
       message: 'Login SuperAdmin Berhasil',
-      token,
       admin: { id: admin.id, name: admin.name, email: admin.email },
     });
   } catch (err) {
@@ -410,8 +422,29 @@ const sendWhatsAppTestMessage = async (req, res) => {
   }
 };
 
+const getSession = async (req, res) => {
+  try {
+    const admin = await prisma.superAdmin.findUnique({
+      where: { id: req.superAdmin.id },
+      select: { id: true, name: true, email: true },
+    });
+    if (!admin) return res.status(404).json({ message: 'SuperAdmin tidak ditemukan' });
+    res.json({ admin });
+  } catch (err) {
+    sendError(res, err, 500);
+  }
+};
+
+const logout = async (req, res) => {
+  res.clearCookie('superadmin_token', { path: '/' });
+  res.clearCookie('csrf_token', { path: '/' });
+  res.json({ message: 'Logout berhasil' });
+};
+
 module.exports = {
   login,
+  getSession,
+  logout,
   getDashboardStats,
   getBusinesses,
   toggleBusiness,

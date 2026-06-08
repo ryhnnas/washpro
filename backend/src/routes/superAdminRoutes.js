@@ -14,6 +14,8 @@ const {
 } = require('../schemas/superAdminSchema');
 const {
   login,
+  getSession,
+  logout,
   getDashboardStats,
   getBusinesses,
   toggleBusiness,
@@ -42,6 +44,8 @@ const superAdminLoginLimiter = rateLimit({
 // === PUBLIC ===
 // POST /api/superadmin/login
 router.post('/login', superAdminLoginLimiter, validate(loginSchema), login);
+router.get('/me', requireSuperAdmin, getSession);
+router.post('/logout', requireSuperAdmin, logout);
 
 // === PROTECTED (SuperAdmin Only) ===
 // GET /api/superadmin/stats

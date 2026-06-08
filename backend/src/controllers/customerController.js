@@ -1,7 +1,7 @@
 const prisma = require('../config/prisma');
 const membershipService = require('../services/membershipService');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
-const { sendError } = require('../utils/errorResponse');
+const { sendError, handleControllerError } = require('../utils/errorResponse');
 
 const getCustomers = async (req, res) => {
   try {
@@ -157,7 +157,7 @@ const createCustomerWithMembership = async (req, res) => {
     });
     res.json(result);
   } catch (error) {
-    sendError(res, error, 500);
+    handleControllerError(res, error, 'Gagal membuat customer dengan membership');
   }
 };
 
@@ -184,15 +184,18 @@ const activateMembership = async (req, res) => {
     });
     if (!customer) return res.status(404).json({ message: 'Customer tidak ditemukan' });
 
-    await membershipService.activateCustomerMembership({
-      businessId: req.user.businessId,
-      customerId: id,
-      templateId,
-      startAt,
+    await prisma.$transaction(async (tx) => {
+      await membershipService.activateCustomerMembership({
+        businessId: req.user.businessId,
+        customerId: id,
+        templateId,
+        startAt,
+        tx,
+      });
     });
     res.json({ message: 'Membership berhasil diaktifkan' });
   } catch (error) {
-    sendError(res, error, 500);
+    handleControllerError(res, error, 'Gagal mengaktifkan membership');
   }
 };
 

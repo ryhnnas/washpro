@@ -1,0 +1,11 @@
+node_modules
+frontend/dist
+backend/uploads
+.git
+.github
+e2e/.auth
+playwright-report
+test-results
+*.md
+.env
+.env.*

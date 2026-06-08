@@ -8,9 +8,11 @@ jest.mock('../../src/config/prisma', () => {
     user: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     refreshToken: {
-      create: jest.fn(),
+      create: jest.fn().mockResolvedValue({ id: 'rt-1' }),
+      updateMany: jest.fn(),
     },
     business: {
       create: jest.fn(),
@@ -27,7 +29,7 @@ jest.mock('../../src/config/prisma', () => {
       count: jest.fn(),
       create: jest.fn(),
     },
-    $transaction: jest.fn(callback => callback(mockPrisma)),
+    $transaction: jest.fn((callback) => callback(mockPrisma)),
   };
   return mockPrisma;
 });
@@ -42,7 +44,10 @@ describe('Auth Controller - Unit Tests', () => {
   let req, res;
 
   beforeEach(() => {
-    req = { body: {}, headers: { 'user-agent': 'jest' } };
+    req = {
+      body: {},
+      headers: { 'user-agent': 'jest-test-agent' },
+    };
     res = {
       cookie: jest.fn(),
       json: jest.fn(),
@@ -54,7 +59,18 @@ describe('Auth Controller - Unit Tests', () => {
   describe('login', () => {
     it('should login successfully with correct credentials', async () => {
       req.body = { email: 'test@example.com', password: 'password123' };
-      const mockUser = { id: '1', email: 'test@example.com', password: 'hashed_password', businessId: 'biz-1', role: 'OWNER', isEmailVerified: true, mustChangePassword: false, phone: null, name: 'Test' };
+      const mockUser = {
+        id: '1',
+        email: 'test@example.com',
+        password: 'hashed_password',
+        businessId: 'biz-1',
+        name: 'Test User',
+        role: 'OWNER',
+        isEmailVerified: true,
+        mustChangePassword: false,
+        phone: null,
+        sessionVersion: 0,
+      };
 
       prisma.user.findUnique.mockResolvedValue(mockUser);
       prisma.business.findUnique.mockResolvedValue({ subscriptionStatus: 'ACTIVE', deletedAt: null });
@@ -63,9 +79,12 @@ describe('Auth Controller - Unit Tests', () => {
 
       await login(req, res);
 
+      expect(prisma.refreshToken.create).toHaveBeenCalled();
+      expect(res.cookie).toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
         token: 'mock_token',
-        message: 'Login Berhasil'
+        message: 'Login Berhasil',
+        user: expect.objectContaining({ id: '1', role: 'OWNER' }),
       }));
     });
 

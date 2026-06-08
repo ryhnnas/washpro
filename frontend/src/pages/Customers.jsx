@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Edit, Trash2, Search, Save, X, ChevronLeft, ChevronRight, Filter, Gift, Clock } from 'lucide-react';
 import api from '../lib/axios';
 import { useAuth } from '../context/AuthContext';
@@ -46,7 +46,7 @@ export default function Customers() {
     setPage(1);
   }, [membershipFilter]);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: 50, search: debouncedSearch });
@@ -59,12 +59,11 @@ export default function Customers() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, debouncedSearch, membershipFilter]);
 
   useEffect(() => {
     fetchCustomers();
-    // membershipPackages sudah dari AppContext, tidak perlu fetch lagi
-  }, [page, debouncedSearch, membershipFilter]);
+  }, [fetchCustomers]);
 
   const handleEdit = (c) => {
     setEditingId(c.id);

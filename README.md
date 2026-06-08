@@ -118,7 +118,53 @@ washpro/
 | `GET /api/superadmin/payments` | Daftar pembayaran pending |
 | `GET /api/health` | Health check |
 
-Lihat file route di `backend/src/routes/` untuk endpoint lengkap.
+## Deployment & CI
+
+### Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Layanan: frontend (Nginx SPA + proxy `/api`), backend (Express), MySQL.
+
+### CI Pipeline (GitHub Actions)
+
+Setiap push/PR menjalankan:
+
+1. `prisma migrate deploy` + seed + unit/integration test (MySQL terisolasi)
+2. Migration upgrade check (schema pre-hardening → hardening migrations)
+3. Frontend lint (`--max-warnings=0`) + production build
+4. Playwright E2E (Chromium, `GOWA_ENABLED=false`, database test terpisah)
+
+### Reset Database Lokal
+
+```bash
+cd backend
+npx prisma migrate reset   # HAPUS semua data, jalankan ulang migration + seed
+```
+
+> **Peringatan:** Jangan jalankan E2E (`npm run test:e2e`) terhadap database development/production. Playwright memakai `DATABASE_URL` test eksplisit (`washpro_ci` di CI). Set `DATABASE_URL` ke database test terpisah sebelum menjalankan E2E lokal.
+
+### Backup Database
+
+```bash
+mysqldump -u user -p washpro > backup_$(date +%Y%m%d).sql
+```
+
+### Deploy Production
+
+1. Set environment production (`NODE_ENV=production`, secret JWT unik, `GOWA_*` sesuai kebutuhan)
+2. `npx prisma migrate deploy` (bukan `migrate dev`)
+3. Build & deploy via Docker Compose atau platform PaaS
+4. Pastikan Nginx SPA memakai security headers (CSP, X-Frame-Options) — lihat `frontend/nginx.conf`
+
+## Keamanan
+
+- Auth tenant & SuperAdmin memakai cookie `httpOnly` + CSRF header
+- `sessionVersion` di JWT — change/reset password merevoke semua session
+- Staff permission enforced di backend (`403 STAFF_PERMISSION_DENIED`)
+- `totalPrice` request deprecated — backend selalu menghitung harga dari database
 
 ## Environment Variables
 

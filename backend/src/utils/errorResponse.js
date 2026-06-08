@@ -3,6 +3,8 @@
  * Mencegah kebocoran informasi internal ke client di production.
  */
 
+const { DomainError } = require('./domainError');
+
 const isDev = () => process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
 /**
@@ -51,4 +53,18 @@ const sendError = (res, error, statusCode = 500, userMessage = null) => {
   });
 };
 
-module.exports = { sendError };
+/**
+ * Handle controller errors — DomainError returns structured 4xx, others fall through to sendError.
+ */
+const handleControllerError = (res, error, defaultMessage = 'Terjadi kesalahan pada server') => {
+  if (error instanceof DomainError) {
+    return res.status(error.statusCode).json({
+      status: 'error',
+      message: error.message,
+      code: error.code,
+    });
+  }
+  return sendError(res, error, 500, defaultMessage);
+};
+
+module.exports = { sendError, handleControllerError };

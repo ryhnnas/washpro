@@ -118,6 +118,7 @@ model User {
   role       Role     @default(STAFF)
   isEmailVerified Boolean @default(false) @map("is_email_verified")
   mustChangePassword Boolean @default(false) @map("must_change_password")
+  sessionVersion Int  @default(0) @map("session_version")
 
   resetPasswordToken   String?   @unique @map("reset_password_token")
   resetPasswordExpires DateTime? @map("reset_password_expires")
@@ -288,7 +289,6 @@ model BusinessSetting {
   allowStaffCustomers    Boolean @default(true)  @map("allow_staff_customers")
   allowStaffServices     Boolean @default(false) @map("allow_staff_services")
   allowStaffReports      Boolean @default(false) @map("allow_staff_reports")
-  allowStaffSettings     Boolean @default(false) @map("allow_staff_settings")
 
   membershipPackageName   String  @default("Paket Membership") @map("membership_package_name")
   membershipDurationDays  Int     @default(30) @map("membership_duration_days")

@@ -41,7 +41,7 @@ const LIMIT = 30;
 
 export default function Tracking() {
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -65,7 +65,7 @@ export default function Tracking() {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      fetchTransactions(page);
+      void fetchTransactions(page);
     }, 0);
     return () => clearTimeout(t);
   }, [page, fetchTransactions]);
@@ -250,7 +250,7 @@ export default function Tracking() {
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
             disabled={page <= 1 || loading}
-            onClick={() => setPage(p => p - 1)}
+            onClick={() => { setLoading(true); setPage(p => p - 1); }}
             className="p-2 rounded-xl border border-slate-200 bg-white text-primary hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
           >
             <ChevronLeft size={20} />
@@ -260,7 +260,7 @@ export default function Tracking() {
           </span>
           <button
             disabled={page >= totalPages || loading}
-            onClick={() => setPage(p => p + 1)}
+            onClick={() => { setLoading(true); setPage(p => p + 1); }}
             className="p-2 rounded-xl border border-slate-200 bg-white text-primary hover:bg-slate-50 disabled:opacity-40 disabled:pointer-events-none transition-colors"
           >
             <ChevronRight size={20} />

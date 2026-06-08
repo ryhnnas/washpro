@@ -3,7 +3,8 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, AreaChart, A
 import { DollarSign, FileText, TrendingUp, Sparkles, AlertCircle, ArrowRight, Clock, Users, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../lib/axios';
-import DateFilter, { getDateRange } from '../components/DateFilter';
+import DateFilter from '../components/DateFilter';
+import { getDateRange } from '../utils/dateRange';
 
 const PAYMENT_COLORS = ['#1A365D', '#FFD700'];
 
@@ -55,7 +56,7 @@ export default function Dashboard() {
       }
     };
     fetchAll();
-  }, [dateFilter, customDate.start, customDate.end]);
+  }, [dateFilter, customDate]);
 
   if (loading) {
     return (

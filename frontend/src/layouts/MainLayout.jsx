@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Activity, FileText, Settings, LogOut, Menu, X, Tags, Users, UserPlus, User, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -14,12 +14,7 @@ export default function MainLayout() {
   const { user, logout } = useAuth();
   const { settings } = useApp();
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSidebarOpen(false);
-    }, 0);
-    return () => clearTimeout(t);
-  }, [location.pathname]);
+  const closeSidebar = () => setSidebarOpen(false);
 
   const handleLogout = () => {
     logout();
@@ -31,6 +26,7 @@ export default function MainLayout() {
     { name: 'Kasir', path: '/cashier', icon: <ShoppingCart size={22} />, id: 'CASHIER' },
     { name: 'Tracking', path: '/tracking', icon: <Activity size={22} />, id: 'TRACKING' },
     { name: 'Pelanggan', path: '/customers', icon: <Users size={22} />, id: 'CUSTOMERS' },
+    { name: 'Layanan', path: '/services', icon: <Tags size={22} />, id: 'SERVICES' },
     { name: 'Laporan', path: '/reports', icon: <FileText size={22} />, id: 'REPORTS' },
     { name: 'Pengaturan Akun', path: '/profile', icon: <User size={22} />, id: 'PROFILE' },
   ];
@@ -42,7 +38,7 @@ export default function MainLayout() {
         const allowed = JSON.parse(settings.staffAllowedMenus);
         // CASHIER, TRACKING, dan PROFILE wajib aktif untuk semua staf
         allowedItems = navItems.filter(item => allowed.includes(item.id) || ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
-      } catch { void 0; }
+      } catch { /* ignore invalid staffAllowedMenus JSON */ }
     } else {
       allowedItems = navItems.filter(item => ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
     }
@@ -71,7 +67,7 @@ export default function MainLayout() {
               {'WashPro'}
             </h1>
           </div>
-          <button className="lg:hidden p-1.5 sm:p-2 rounded-lg hover:bg-white/10 text-secondary" onClick={() => setSidebarOpen(false)}>
+          <button className="lg:hidden p-1.5 sm:p-2 rounded-lg hover:bg-white/10 text-secondary" onClick={() => setSidebarOpen(false)} aria-label="Tutup menu navigasi">
             <X size={18} className="sm:w-5 sm:h-5" />
           </button>
         </div>
@@ -83,6 +79,7 @@ export default function MainLayout() {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={closeSidebar}
               className={({ isActive }) => `
                 flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm
                 ${isActive 
@@ -103,10 +100,6 @@ export default function MainLayout() {
               <NavLink to="/subscription" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
                 <div className={`transition-transform duration-300 group-hover:scale-110`}><CreditCard size={18} className="sm:w-5 sm:h-5" /></div>
                 <span className="truncate">Informasi Langganan</span>
-              </NavLink>
-              <NavLink to="/services" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
-                <div className={`transition-transform duration-300 group-hover:scale-110`}><Tags size={18} className="sm:w-5 sm:h-5" /></div>
-                <span className="truncate">Daftar Layanan</span>
               </NavLink>
               <NavLink to="/settings" className={({ isActive }) => `flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2.5 sm:py-3.5 rounded-lg sm:rounded-2xl transition-all duration-300 group font-medium text-xs sm:text-sm ${isActive ? 'bg-tertiary text-primary shadow-lg shadow-tertiary/20 font-bold' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
                 <div className={`transition-transform duration-300 group-hover:scale-110`}><Settings size={18} className="sm:w-5 sm:h-5" /></div>
@@ -146,9 +139,10 @@ export default function MainLayout() {
         <SubscriptionBanner />
         <header className="h-16 sm:h-18 lg:h-20 flex items-center justify-between px-3 sm:px-6 lg:px-10 border-b border-primary/5 bg-white/70 backdrop-blur-md z-30 relative sticky top-0 shadow-sm">
           <div className="flex items-center gap-2 sm:gap-4">
-            <button 
+            <button
               className="lg:hidden p-1.5 sm:p-2 -ml-1.5 sm:-ml-2 rounded-lg sm:rounded-xl text-primary hover:bg-primary/5 transition-colors"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Buka menu navigasi"
             >
               <Menu size={20} className="sm:w-6 sm:h-6" />
             </button>
@@ -164,9 +158,11 @@ export default function MainLayout() {
                 <p className="text-xs sm:text-sm font-extrabold text-primary">Selamat bekerja, {user?.name?.split(' ')[0]}</p>
                 <p className="text-[10px] sm:text-xs text-slate-500 font-medium">{new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
              </div>
-             <button 
+             <button
+                type="button"
                 onClick={() => navigate('/profile')}
                 className="w-8 sm:w-10 h-8 sm:h-10 flex items-center justify-center rounded-lg sm:rounded-xl bg-primary/5 hover:bg-primary/10 text-primary transition-colors border border-primary/5"
+                aria-label="Buka halaman profil"
              >
                 <User size={16} className="sm:w-4.5 sm:h-4.5" />
              </button>
