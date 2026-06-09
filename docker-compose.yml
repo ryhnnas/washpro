@@ -47,6 +47,12 @@ services:
       QRIS_MERCHANT_NAME: ${QRIS_MERCHANT_NAME:-WashPro}
       QRIS_MERCHANT_BANK: ${QRIS_MERCHANT_BANK:-QRIS}
       SUPERADMIN_PHONE: ${SUPERADMIN_PHONE:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_ALLOW_INSECURE_TLS: ${SMTP_ALLOW_INSECURE_TLS:-false}
     volumes:
       - uploads:/app/backend/uploads
     depends_on:
