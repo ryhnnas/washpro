@@ -16,8 +16,9 @@ const normalizePhone = (raw) => {
 
 // Global config from .env
 const getGatewayUrl = () => (process.env.GOWA_API_URL || 'http://localhost:3000').replace(/\/$/, '');
-const getGatewayHeaders = (businessId) => {
-  const headers = { 'Content-Type': 'application/json' };
+const getGatewayHeaders = (businessId, { json = true } = {}) => {
+  const headers = {};
+  if (json) headers['Content-Type'] = 'application/json';
   const username = process.env.GOWA_USERNAME;
   const password = process.env.GOWA_PASSWORD;
   if (username && password) {
@@ -27,6 +28,26 @@ const getGatewayHeaders = (businessId) => {
     headers['X-Device-Id'] = businessId;
   }
   return headers;
+};
+
+// GOWA mengembalikan URL QR yang dilindungi Basic Auth — browser tidak bisa load langsung.
+// Ambil gambar di server lalu kirim sebagai data URL ke frontend.
+const resolveQrForDisplay = async (qr, businessId) => {
+  if (!qr || typeof qr !== 'string') return qr;
+  if (qr.startsWith('data:image')) return qr;
+  if (!qr.startsWith('http')) return qr;
+
+  const res = await fetch(qr, {
+    headers: getGatewayHeaders(businessId, { json: false }),
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) {
+    throw new Error(`Gagal mengambil gambar QR: HTTP ${res.status}`);
+  }
+
+  const contentType = res.headers.get('content-type') || 'image/png';
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return `data:${contentType};base64,${buffer.toString('base64')}`;
 };
 
 const ensureBusinessForWhatsApp = async (businessId) => {
@@ -176,7 +197,10 @@ const loginWithQR = async (businessId, retry = 0) => {
       create: { businessId, status: 'connecting', connectedVia: 'qr' },
       update: { status: 'connecting', connectedVia: 'qr' },
     });
-    return { ok: true, qr: data.results?.qr_link || data.results };
+
+    const rawQr = data.results?.qr_link || data.results;
+    const qr = await resolveQrForDisplay(rawQr, businessId);
+    return { ok: true, qr };
   } catch (err) {
     if (retry < 3) {
       console.log('[WA] loginWithQR retrying...', retry + 1);
