@@ -21,7 +21,7 @@ const rejectPaymentSchema = z.object({
 });
 
 const upsertPlanSchema = z.object({
-  id: z.string().uuid().optional(),
+  id: z.string().optional(),
   name: z.string().min(3, 'Nama paket minimal 3 karakter'),
   price: z.number().int().positive('Harga harus lebih dari 0'),
   durationDays: z.number().int().positive('Durasi harus lebih dari 0'),

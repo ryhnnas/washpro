@@ -265,7 +265,7 @@ const createTransaction = async (req, res) => {
       if (setting?.whatsappNotificationStates) {
         try {
           allowedStates = JSON.parse(setting.whatsappNotificationStates);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (allowedStates.includes('PENDING')) {
@@ -298,7 +298,7 @@ const updateStatus = async (req, res) => {
       SELESAI: ['DIAMBIL'],
       DIAMBIL: [],
     };
-    
+
     if (existing.status !== status && !VALID_TRANSITIONS[existing.status]?.includes(status)) {
       return res.status(400).json({ error: `Transisi status dari ${existing.status} ke ${status} tidak valid.` });
     }
@@ -319,7 +319,7 @@ const updateStatus = async (req, res) => {
       if (setting?.whatsappNotificationStates) {
         try {
           allowedStates = JSON.parse(setting.whatsappNotificationStates);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (allowedStates.includes(status)) {
@@ -391,7 +391,7 @@ const getExportData = async (req, res) => {
     // Aggregate Summary
     const totalTransactions = transactions.length;
     const totalRevenue = transactions.reduce((sum, t) => sum + (t.payableAmount || 0), 0);
-    
+
     // Status Breakdown
     const statusBreakdown = transactions.reduce((acc, t) => {
       acc[t.status] = (acc[t.status] || 0) + 1;
@@ -499,12 +499,12 @@ const getReportCharts = async (req, res) => {
   }
 };
 
-module.exports = { 
-  getTransactions, 
-  getOverdueTransactions, 
-  createTransaction, 
-  updateStatus, 
-  resendReceipt, 
+module.exports = {
+  getTransactions,
+  getOverdueTransactions,
+  createTransaction,
+  updateStatus,
+  resendReceipt,
   getExportData,
   getReportCharts
 };

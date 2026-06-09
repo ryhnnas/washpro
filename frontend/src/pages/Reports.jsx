@@ -3,7 +3,7 @@ import { FileSpreadsheet, Search, ChevronLeft, ChevronRight, DollarSign, FileTex
 import api from '../lib/axios';
 import DateFilter from '../components/DateFilter';
 import { getDateRange } from '../utils/dateRange';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell, BarChart, Bar
@@ -76,11 +76,12 @@ export default function Reports() {
     const toastId = toast.loading('Membuat Laporan PDF...');
 
     try {
-      const [{ jsPDF }, , html2canvas] = await Promise.all([
+      const [{ jsPDF }, , html2canvasModule] = await Promise.all([
         import('jspdf'),
         import('jspdf-autotable'),
-        import('html2canvas'),
+        import('html2canvas-pro'),
       ]);
+      const html2canvas = html2canvasModule.default || html2canvasModule;
 
       const { startDate, endDate } = getDateRange(dateFilter, customDate);
       const res = await api.get(`/transactions/export?search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
@@ -115,7 +116,7 @@ export default function Reports() {
 
       const captureChart = async (ref) => {
         if (!ref?.current) return null;
-        const canvas = await html2canvas.default(ref.current, { scale: 2, backgroundColor: '#ffffff' });
+        const canvas = await html2canvas(ref.current, { scale: 2, backgroundColor: '#ffffff' });
         return canvas.toDataURL('image/png', 1.0);
       };
 
@@ -192,35 +193,417 @@ export default function Reports() {
     setExportLoading(true);
     const toastId = toast.loading('Membuat File Excel...');
     try {
-      const XLSX = await import('xlsx');
+      const XLSXModule = await import('xlsx-js-style');
+      const XLSX = XLSXModule.default || XLSXModule;
       const { startDate, endDate } = getDateRange(dateFilter, customDate);
       const res = await api.get(`/transactions/export?search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
-      const { transactions, summary } = res.data;
+      const { transactions, summary, serviceBreakdown, business } = res.data;
 
+      const businessName = business?.name || 'WashPro Laundry';
       const wb = XLSX.utils.book_new();
-      const summaryData = [
-        ['RINGKASAN LAPORAN'],
-        ['Periode', `${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}`],
-        [],
-        ['Total Transaksi', summary.totalTransactions],
-        ['Total Pendapatan', summary.totalRevenue],
-        ['Rata-rata/Hari', summary.avgRevenuePerDay],
+
+      // ==================== SHEET 1: RINGKASAN ====================
+      const summaryData = [];
+
+      // Block 1: Business Profile
+      summaryData.push([businessName]);
+      summaryData.push([`${business?.address || ''} | Telp: ${business?.phone || ''}`]);
+      summaryData.push([]);
+      
+      // Block 2: Title
+      summaryData.push(['LAPORAN KINERJA OPERASIONAL']);
+      summaryData.push([`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} s.d. ${new Date(endDate).toLocaleDateString('id-ID')}`]);
+      summaryData.push([`Tanggal Cetak: ${new Date().toLocaleString('id-ID')}`]);
+      if (debouncedSearch) {
+        summaryData.push([`Filter Pencarian: "${debouncedSearch}"`]);
+      } else {
+        summaryData.push([]);
+      }
+      summaryData.push([]);
+
+      // Block 3: Metrics Table
+      summaryData.push(['METRIK UTAMA']);
+      summaryData.push(['Metrik', 'Nilai']);
+      summaryData.push(['Total Transaksi', summary.totalTransactions]);
+      summaryData.push(['Total Pendapatan', summary.totalRevenue]);
+      summaryData.push(['Rata-rata Pendapatan / Hari', summary.avgRevenuePerDay]);
+      summaryData.push([]);
+
+      // Block 4: Status Distribution
+      summaryData.push(['DISTRIBUSI STATUS TRANSAKSI']);
+      summaryData.push(['Status', 'Jumlah Transaksi']);
+      const statusEntries = Object.entries(summary.statusBreakdown || {});
+      if (statusEntries.length > 0) {
+        statusEntries.forEach(([status, count]) => {
+          summaryData.push([status, count]);
+        });
+      } else {
+        summaryData.push(['-', 0]);
+      }
+      summaryData.push([]);
+
+      // Block 5: Top Services
+      summaryData.push(['TOP 5 LAYANAN TERLARIS']);
+      summaryData.push(['Nama Layanan', 'Kuantitas Terjual', 'Total Pendapatan']);
+      if (serviceBreakdown && serviceBreakdown.length > 0) {
+        serviceBreakdown.slice(0, 5).forEach(s => {
+          summaryData.push([s.name, s.totalQty, s.totalRevenue]);
+        });
+      } else {
+        summaryData.push(['Tidak ada data', 0, 0]);
+      }
+
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+
+      // Helper function to apply styles to Sheet 1
+      const applyStylesToSheet1 = (ws) => {
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        
+        const thinBorder = {
+          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } },
+        };
+
+        const mainHeaderStyle = {
+          font: { name: 'Arial', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '1A365D' } }, // Navy
+          alignment: { horizontal: 'center', vertical: 'center' },
+        };
+
+        const subHeaderStyle = {
+          font: { name: 'Arial', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '0F766E' } }, // Teal
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const boldLabelStyle = {
+          font: { name: 'Arial', sz: 10, bold: true, color: { rgb: '1A202C' } },
+          alignment: { horizontal: 'left', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const textStyleLeft = {
+          font: { name: 'Arial', sz: 10, color: { rgb: '2D3748' } },
+          alignment: { horizontal: 'left', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const numberStyleRight = {
+          font: { name: 'Arial', sz: 10, color: { rgb: '2D3748' } },
+          alignment: { horizontal: 'right', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        let inTable = null;
+        let isTableHeader = false;
+
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          if (r === 0) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Arial', sz: 16, bold: true, color: { rgb: '1A365D' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+              };
+            }
+            continue;
+          }
+          if (r === 1) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Arial', sz: 9, italic: true, color: { rgb: '718096' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+              };
+            }
+            continue;
+          }
+          if (r === 3) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Arial', sz: 13, bold: true, color: { rgb: '2B6CB0' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+              };
+            }
+            continue;
+          }
+          if (r === 4 || r === 5 || r === 6) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Arial', sz: 9, color: { rgb: '4A5568' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+              };
+            }
+            continue;
+          }
+
+          const cellA = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+          if (cellA && typeof cellA.v === 'string') {
+            if (cellA.v === 'METRIK UTAMA') {
+              inTable = 'METRIK';
+              isTableHeader = true;
+            } else if (cellA.v === 'DISTRIBUSI STATUS TRANSAKSI') {
+              inTable = 'STATUS';
+              isTableHeader = true;
+            } else if (cellA.v === 'TOP 5 LAYANAN TERLARIS') {
+              inTable = 'LAYANAN';
+              isTableHeader = true;
+            }
+          }
+
+          if (inTable) {
+            if (isTableHeader) {
+              for (let c = range.s.c; c <= range.e.c; c++) {
+                const cell = ws[XLSX.utils.encode_cell({ r, c })];
+                if (cell) {
+                  cell.s = mainHeaderStyle;
+                }
+              }
+              isTableHeader = false;
+              continue;
+            }
+
+            const isColsHeader = cellA && (cellA.v === 'Metrik' || cellA.v === 'Status' || cellA.v === 'Nama Layanan');
+            if (isColsHeader) {
+              for (let c = range.s.c; c <= range.e.c; c++) {
+                const cell = ws[XLSX.utils.encode_cell({ r, c })];
+                if (cell) {
+                  cell.s = subHeaderStyle;
+                }
+              }
+              continue;
+            }
+
+            if (!cellA || cellA.v === '') {
+              inTable = null;
+              continue;
+            }
+
+            if (inTable === 'METRIK') {
+              const cellVal = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+              if (cellA) cellA.s = boldLabelStyle;
+              if (cellVal) {
+                cellVal.s = numberStyleRight;
+                cellVal.t = 'n';
+                if (cellA.v.includes('Pendapatan')) {
+                  cellVal.z = '"Rp"#,##0';
+                }
+              }
+            } else if (inTable === 'STATUS') {
+              const cellVal = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+              if (cellA) cellA.s = boldLabelStyle;
+              if (cellVal) {
+                cellVal.s = numberStyleRight;
+                cellVal.t = 'n';
+                cellVal.z = '#,##0';
+              }
+            } else if (inTable === 'LAYANAN') {
+              const cellQty = ws[XLSX.utils.encode_cell({ r, c: 1 })];
+              const cellRev = ws[XLSX.utils.encode_cell({ r, c: 2 })];
+              if (cellA) cellA.s = textStyleLeft;
+              if (cellQty) {
+                cellQty.s = numberStyleRight;
+                cellQty.t = 'n';
+                cellQty.z = '#,##0.00';
+              }
+              if (cellRev) {
+                cellRev.s = numberStyleRight;
+                cellRev.t = 'n';
+                cellRev.z = '"Rp"#,##0';
+              }
+            }
+          }
+        }
+      };
+
+      applyStylesToSheet1(ws1);
+
+      // Merges for Sheet 1
+      ws1['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }, // Business Name
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } }, // Address & Phone
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 2 } }, // Laporan Kinerja
+        { s: { r: 4, c: 0 }, e: { r: 4, c: 2 } }, // Periode
+        { s: { r: 5, c: 0 }, e: { r: 5, c: 2 } }, // Cetak
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summaryData), 'Ringkasan');
+      if (debouncedSearch) {
+        ws1['!merges'].push({ s: { r: 6, c: 0 }, e: { r: 6, c: 2 } });
+      }
 
-      const txData = transactions.map(t => ({
-        Tanggal: new Date(t.startDate).toLocaleDateString('id-ID'),
-        Pelanggan: t.customerName,
-        Layanan: t.serviceName,
-        Total: t.payableAmount ?? t.totalPrice,
-        Status: t.status,
-        Metode: t.paymentMethod
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(txData), 'Transaksi');
+      // Autofit widths
+      const autofitCols = (ws, minWidths = {}) => {
+        const rRange = XLSX.utils.decode_range(ws['!ref']);
+        const cols = [];
+        for (let c = rRange.s.c; c <= rRange.e.c; c++) {
+          let maxLen = minWidths[c] || 10;
+          for (let r = rRange.s.r; r <= rRange.e.r; r++) {
+            const isMerged = (ws['!merges'] || []).some(m => r >= m.s.r && r <= m.e.r && c >= m.s.c && c <= m.e.c && m.e.c > m.s.c);
+            if (isMerged) continue;
 
-      XLSX.writeFile(wb, `Laporan_${new Date().getTime()}.xlsx`);
-      toast.success('Excel berhasil diunduh', { id: toastId });
-    } catch {
+            const cellRef = XLSX.utils.encode_cell({ r, c });
+            const cell = ws[cellRef];
+            if (cell && cell.v !== undefined && cell.v !== null) {
+              let valStr = cell.v.toString();
+              if (cell.z && cell.z.includes('Rp')) {
+                valStr = 'Rp ' + Number(cell.v).toLocaleString('id-ID');
+              }
+              if (valStr.length > maxLen) {
+                maxLen = valStr.length;
+              }
+            }
+          }
+          cols.push({ wch: maxLen + 3 });
+        }
+        ws['!cols'] = cols;
+      };
+
+      autofitCols(ws1, { 0: 30, 1: 15, 2: 20 });
+      XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan Laporan');
+
+      // ==================== SHEET 2: DETAIL TRANSAKSI ====================
+      const txHeaderData = [
+        ['DETAIL TRANSAKSI HARIAN'],
+        [`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} s.d. ${new Date(endDate).toLocaleDateString('id-ID')}`],
+        [],
+        ['No.', 'Tanggal', 'Pelanggan', 'Layanan', 'Status', 'Metode Pembayaran', 'Total Tagihan']
+      ];
+
+      const txRows = transactions.map((t, idx) => [
+        idx + 1,
+        new Date(t.startDate).toLocaleDateString('id-ID'),
+        t.customerName || t.customer?.name || '-',
+        t.serviceName + (t.weight ? ` (${t.weight} kg)` : ''),
+        t.status,
+        t.paymentMethod || '-',
+        t.payableAmount ?? t.totalPrice ?? 0
+      ]);
+
+      const txSheetData = [...txHeaderData, ...txRows];
+      const ws2 = XLSX.utils.aoa_to_sheet(txSheetData);
+
+      const applyStylesToSheet2 = (ws) => {
+        const range = XLSX.utils.decode_range(ws['!ref']);
+
+        const thinBorder = {
+          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } },
+        };
+
+        const headerStyle = {
+          font: { name: 'Arial', sz: 10, bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '1A365D' } }, // Navy
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const textStyleLeft = {
+          font: { name: 'Arial', sz: 10, color: { rgb: '2D3748' } },
+          alignment: { horizontal: 'left', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const textStyleCenter = {
+          font: { name: 'Arial', sz: 10, color: { rgb: '2D3748' } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const numberStyleRight = {
+          font: { name: 'Arial', sz: 10, color: { rgb: '2D3748' } },
+          alignment: { horizontal: 'right', vertical: 'center' },
+          border: thinBorder,
+        };
+
+        const stripeStyleLeft = {
+          ...textStyleLeft,
+          fill: { fgColor: { rgb: 'F8FAFC' } },
+        };
+        const stripeStyleCenter = {
+          ...textStyleCenter,
+          fill: { fgColor: { rgb: 'F8FAFC' } },
+        };
+        const stripeStyleRight = {
+          ...numberStyleRight,
+          fill: { fgColor: { rgb: 'F8FAFC' } },
+        };
+
+        for (let r = range.s.r; r <= range.e.r; r++) {
+          if (r === 0) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Arial', sz: 14, bold: true, color: { rgb: '1A365D' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+              };
+            }
+            continue;
+          }
+          if (r === 1) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+            if (cell) {
+              cell.s = {
+                font: { name: 'Arial', sz: 10, italic: true, color: { rgb: '4A5568' } },
+                alignment: { horizontal: 'center', vertical: 'center' },
+              };
+            }
+            continue;
+          }
+          if (r === 2) continue;
+
+          if (r === 3) {
+            for (let c = range.s.c; c <= range.e.c; c++) {
+              const cell = ws[XLSX.utils.encode_cell({ r, c })];
+              if (cell) {
+                cell.s = headerStyle;
+              }
+            }
+            continue;
+          }
+
+          const isEvenRow = r % 2 === 0;
+          for (let c = range.s.c; c <= range.e.c; c++) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c })];
+            if (cell) {
+              let styleToApply;
+              if (c === 0 || c === 1 || c === 4 || c === 5) {
+                styleToApply = isEvenRow ? stripeStyleCenter : textStyleCenter;
+              } else if (c === 6) {
+                styleToApply = isEvenRow ? stripeStyleRight : numberStyleRight;
+                cell.t = 'n';
+                cell.z = '"Rp"#,##0';
+              } else {
+                styleToApply = isEvenRow ? stripeStyleLeft : textStyleLeft;
+              }
+              cell.s = styleToApply;
+            }
+          }
+        }
+      };
+
+      applyStylesToSheet2(ws2);
+
+      ws2['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }, // Title
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }, // Period
+      ];
+
+      autofitCols(ws2, { 0: 6, 1: 12, 2: 20, 3: 25, 4: 12, 5: 15, 6: 18 });
+      XLSX.utils.book_append_sheet(wb, ws2, 'Detail Transaksi');
+
+      // Write and Download
+      const cleanBusinessName = businessName.replace(/[^a-z0-9]/gi, '_');
+      const fileDate = new Date(startDate).toISOString().split('T')[0] + '_to_' + new Date(endDate).toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Laporan_${cleanBusinessName}_${fileDate}.xlsx`);
+      toast.success('Excel berhasil diunduh!', { id: toastId });
+    } catch (err) {
+      console.error(err);
       toast.error('Gagal export Excel', { id: toastId });
     } finally {
       setExportLoading(false);
@@ -374,7 +757,6 @@ export default function Reports() {
         </div>
       </div>
 
-      <Toaster position="bottom-right" />
     </div>
   );
 }

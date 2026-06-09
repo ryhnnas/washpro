@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Info, Lock } from 'lucide-react';
+import { Info, Lock, Eye, EyeOff, Check } from 'lucide-react';
 
 export const getPasswordPolicyErrors = (password) => {
   const p = String(password || '');
@@ -39,11 +39,27 @@ export default function PasswordInput({
   disabled = false,
 }) {
   const [showHint, setShowHint] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  
   const strength = useMemo(() => getStrength(value), [value]);
 
   const strengthClass =
     strength.level === 3 ? 'bg-green-500' : strength.level === 2 ? 'bg-amber-500' : 'bg-rose-500';
   const strengthWidth = strength.level === 3 ? 'w-full' : strength.level === 2 ? 'w-2/3' : 'w-1/3';
+
+  const rules = useMemo(() => {
+    const p = value || '';
+    return [
+      { label: 'Minimal 8 karakter', valid: p.length >= 8 },
+      { label: 'Mengandung huruf besar', valid: /[A-Z]/.test(p) },
+      { label: 'Mengandung huruf kecil', valid: /[a-z]/.test(p) },
+      { label: 'Mengandung angka', valid: /[0-9]/.test(p) },
+      { label: 'Mengandung simbol', valid: /[^A-Za-z0-9]/.test(p) },
+    ];
+  }, [value]);
+
+  const displayHint = showHint || isFocused;
 
   return (
     <div>
@@ -64,28 +80,50 @@ export default function PasswordInput({
 
       <div className="relative group">
         <input
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           placeholder={placeholder}
-          className="premium-input bg-slate-50 premium-input-icon select-all"
+          className="premium-input bg-slate-50 premium-input-icon select-all pr-12"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={required}
           disabled={disabled}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
         />
         <Lock
           size={18}
           className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors"
         />
 
-        {showHint && (
+        <button
+          type="button"
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+          tabIndex="-1"
+          aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+
+        {displayHint && (
           <div className="absolute right-0 top-full mt-2 w-full rounded-2xl border border-slate-200 bg-white p-4 shadow-xl z-20">
             <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2">Aturan Password</p>
-            <ul className="text-xs text-slate-600 space-y-1 font-medium">
-              <li>Minimal 8 karakter</li>
-              <li>Mengandung huruf besar</li>
-              <li>Mengandung huruf kecil</li>
-              <li>Mengandung angka</li>
-              <li>Mengandung simbol</li>
+            <ul className="text-xs space-y-1.5 font-medium">
+              {rules.map((rule, index) => (
+                <li
+                  key={index}
+                  className={`flex items-center gap-2 transition-colors ${
+                    rule.valid ? 'text-green-600 font-bold' : 'text-slate-400'
+                  }`}
+                >
+                  {rule.valid ? (
+                    <Check size={14} className="text-green-600 shrink-0" />
+                  ) : (
+                    <span className="w-3.5 h-3.5 flex items-center justify-center text-[10px] text-slate-300 shrink-0">•</span>
+                  )}
+                  <span>{rule.label}</span>
+                </li>
+              ))}
             </ul>
           </div>
         )}

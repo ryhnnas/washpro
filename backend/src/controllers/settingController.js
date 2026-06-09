@@ -80,7 +80,7 @@ const syncMembershipPackages = async (tx, businessId, membershipPackages) => {
 const getSettings = async (req, res) => {
   try {
     const businessId = req.user.businessId;
-    
+
     const business = await prisma.business.findUnique({
       where: { id: businessId },
       include: { setting: true }
@@ -101,8 +101,8 @@ const getSettings = async (req, res) => {
     const menus = ['CASHIER', 'TRACKING'];
     if (setting.allowStaffDashboard) menus.push('DASHBOARD');
     if (setting.allowStaffCustomers) menus.push('CUSTOMERS');
-    if (setting.allowStaffServices)  menus.push('SERVICES');
-    if (setting.allowStaffReports)   menus.push('REPORTS');
+    if (setting.allowStaffServices) menus.push('SERVICES');
+    if (setting.allowStaffReports) menus.push('REPORTS');
 
     // 2. Handle WhatsApp Templates
     let whatsappTemplates = { RECEIPT: null, PROSES: null, SELESAI: null, DIAMBIL: null };

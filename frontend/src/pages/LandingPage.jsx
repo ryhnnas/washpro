@@ -159,6 +159,23 @@ export default function LandingPage() {
         </div>
       </footer>
 
+      {/* Floating WhatsApp Button */}
+      <a 
+        href={`https://wa.me/${import.meta.env.VITE_CONTACT_PHONE || '6281234567890'}?text=${encodeURIComponent('Halo WashPro, saya ingin bertanya tentang sistem POS untuk bisnis laundry saya...')}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[#25D366] text-white p-3.5 sm:p-4 rounded-full shadow-2xl hover:bg-[#1ebd59] hover:scale-105 active:scale-95 transition-all duration-300 group"
+        aria-label="Hubungi kami di WhatsApp"
+      >
+        <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 ease-out whitespace-nowrap text-sm font-extrabold pr-0 group-hover:pr-1">
+          Hubungi Kami
+        </span>
+        <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current" xmlns="http://www.w3.org/2000/svg">
+          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.458L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.413 9.863-9.847.002-2.63-1.023-5.101-2.887-6.968C16.579 1.971 14.113 1.05 11.49 1.05c-5.44 0-9.866 4.415-9.869 9.85-.001 1.77.464 3.497 1.348 5.022L1.93 21.03l5.35-1.403.003-.003-.636-.473z"/>
+          <path d="M16.732 13.753c-.3-.15-1.771-.875-2.046-.975-.276-.1-.476-.15-.676.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.266-.467-2.41-1.485-.89-.795-1.49-1.77-1.665-2.07-.175-.3-.02-.463.13-.613.135-.135.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.676-1.625-.925-2.225-.244-.589-.48-.51-.66-.52-.17-.01-.365-.01-.56-.01-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5 0 1.475 1.075 2.9 1.225 3.1.15.2 2.11 3.22 5.11 4.52.714.31 1.27.495 1.7.632.717.227 1.37.195 1.885.118.574-.086 1.771-.725 2.021-1.399.25-.675.25-1.25.175-1.399-.075-.15-.275-.225-.575-.375z"/>
+        </svg>
+      </a>
+
     </div>
   );
 }

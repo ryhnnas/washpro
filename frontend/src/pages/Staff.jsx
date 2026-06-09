@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, Search, Trash2, Edit2, X, Check, Loader2, User, Mail, Phone } from 'lucide-react';
 import api from '../lib/axios';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 export default function Staff() {
@@ -336,7 +336,6 @@ export default function Staff() {
         </div>
       )}
 
-      <Toaster position="bottom-right" />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit, Save, X } from 'lucide-react';
 import api from '../lib/axios';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TableSkeleton from '../components/TableSkeleton';
 
@@ -218,7 +218,6 @@ export default function Services() {
         onConfirm={() => { confirmDialog.onConfirm?.(); closeConfirm(); }}
         onCancel={closeConfirm}
       />
-      <Toaster position="bottom-right" />
     </div>
   );
 }

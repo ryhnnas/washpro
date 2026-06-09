@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { authService } from '../services/authService';
 import { useNavigate, Link } from 'react-router-dom';
 import { Store, ArrowRight, User, Mail, Phone } from 'lucide-react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
 export default function Register() {
@@ -153,7 +153,6 @@ export default function Register() {
           </div>
         </div>
       </div>
-      <Toaster position="bottom-right" />
     </div>
   );
 }

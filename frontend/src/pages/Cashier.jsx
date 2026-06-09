@@ -498,7 +498,7 @@ export default function Cashier() {
                  )}
                  <div className="flex justify-between items-center whitespace-nowrap">
                     <span className="text-xs sm:text-sm text-slate-500 font-bold mb-1">Total Tagihan</span>
-                    <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-primary tracking-tighter">
+                    <span className="text-xl sm:text-2xl lg:text-2xl font-black text-primary tracking-tighter">
                       Rp {totalPrice.toLocaleString('id-ID')}
                     </span>
                  </div>

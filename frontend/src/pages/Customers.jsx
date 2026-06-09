@@ -3,7 +3,7 @@ import { Edit, Trash2, Search, Save, X, ChevronLeft, ChevronRight, Filter, Gift,
 import api from '../lib/axios';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 export default function Customers() {
@@ -401,7 +401,6 @@ export default function Customers() {
         onConfirm={() => { confirmDialog.onConfirm?.(); closeConfirm(); }}
         onCancel={closeConfirm}
       />
-      <Toaster position="bottom-right" />
     </div>
   );
 }
