@@ -14,7 +14,7 @@ const getDashboardStats = async (req, res) => {
     }
 
     const totalTransactions = await prisma.transaction.count({
-      where: { businessId, ...dateFilter },
+      where: { businessId, ...dateFilter, status: { not: 'CANCELLED' } },
     });
 
     const revenueAggr = await prisma.transaction.aggregate({
@@ -22,15 +22,16 @@ const getDashboardStats = async (req, res) => {
       where: {
         businessId,
         ...dateFilter,
+        status: { not: 'CANCELLED' },
       },
     });
     const totalRevenue = revenueAggr._sum.payableAmount || 0;
 
     const cashCount = await prisma.transaction.count({
-      where: { businessId, paymentMethod: 'CASH', ...dateFilter },
+      where: { businessId, paymentMethod: 'CASH', status: { not: 'CANCELLED' }, ...dateFilter },
     });
     const qrisCount = await prisma.transaction.count({
-      where: { businessId, paymentMethod: 'QRIS', ...dateFilter },
+      where: { businessId, paymentMethod: 'QRIS', status: { not: 'CANCELLED' }, ...dateFilter },
     });
 
     // Ringkasan status pengerjaan (untuk tahu antrian aktif vs selesai)
@@ -96,6 +97,7 @@ const getRevenueTrend = async (req, res) => {
       where: {
         businessId,
         startDate: { gte: start, lte: end },
+        status: { not: 'CANCELLED' },
       },
       select: { startDate: true, payableAmount: true, paymentMethod: true },
     });

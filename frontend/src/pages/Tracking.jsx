@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, Search, Package, Check, ArrowRight, MessageCircle, Phone, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import api from '../lib/axios';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PaymentFinalizeModal from '../components/PaymentFinalizeModal';
+import CancelTransactionModal from '../components/CancelTransactionModal';
 
 const STATUS_CONFIG = {
   PENDING: {
@@ -27,6 +29,12 @@ const STATUS_CONFIG = {
     bg: 'bg-slate-100',
     border: 'border-slate-200',
     progress: '100%'
+  },
+  CANCELLED: {
+    color: 'text-rose-500', 
+    bg: 'bg-rose-100',
+    border: 'border-rose-200',
+    progress: '0%'
   }
 };
 
@@ -34,7 +42,8 @@ const NEXT_STATUS = {
   PENDING: 'PROSES',
   PROSES: 'SELESAI',
   SELESAI: 'DIAMBIL',
-  DIAMBIL: null
+  DIAMBIL: null,
+  CANCELLED: null
 };
 
 const LIMIT = 30;
@@ -48,6 +57,8 @@ export default function Tracking() {
   const [toast, setToast] = useState(null);
   const [overdueCount, setOverdueCount] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, id: null, currentStatus: null });
+  const [finalizeModal, setFinalizeModal] = useState({ isOpen: false, id: null, totalPrice: 0, customerName: '', loading: false });
+  const [cancelModal, setCancelModal] = useState({ isOpen: false, id: null, customerName: '', loading: false });
 
   const fetchTransactions = useCallback(async (currentPage) => {
     setLoading(true);
@@ -78,7 +89,19 @@ export default function Tracking() {
   const handleUpdateStatus = async (id, currentStatus) => {
     const next = NEXT_STATUS[currentStatus];
     if (!next) return;
-    // Buka confirm dialog, eksekusi setelah konfirmasi
+
+    const txn = transactions.find(t => t.id === id);
+    if (next === 'DIAMBIL' && txn && txn.paymentMethod === 'BAYAR_NANTI') {
+      setFinalizeModal({
+        isOpen: true,
+        id,
+        totalPrice: txn.totalPrice || 0,
+        customerName: txn.customerName || 'Pelanggan',
+        loading: false
+      });
+      return;
+    }
+
     setConfirmDialog({ isOpen: true, id, currentStatus });
   };
 
@@ -105,6 +128,48 @@ export default function Tracking() {
     }
   };
 
+  const handleFinalizePayment = async (paymentMethod) => {
+    const { id } = finalizeModal;
+    setFinalizeModal(prev => ({ ...prev, loading: true }));
+    try {
+      const res = await api.patch(`/transactions/${id}/finalize-payment`, { paymentMethod });
+      const wa = res.data?.whatsapp;
+      
+      setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'DIAMBIL', paymentMethod: paymentMethod } : t));
+      
+      if (wa?.ok) {
+        showToast('success', `Status diperbarui ke DIAMBIL via ${paymentMethod} — notifikasi WA terkirim.`);
+      } else if (wa?.skipped) {
+        showToast('info', `Status diperbarui ke DIAMBIL via ${paymentMethod}. (WA dilewati: ${wa.reason})`);
+      } else if (wa?.error) {
+        showToast('warning', `Status diperbarui, namun WA gagal: ${wa.error}`);
+      } else {
+        showToast('success', `Pembayaran dicatat via ${paymentMethod} & cucian selesai diambil.`);
+      }
+      setFinalizeModal({ isOpen: false, id: null, totalPrice: 0, customerName: '', loading: false });
+      fetchTransactions(page);
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Gagal memproses pembayaran');
+      setFinalizeModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleCancelTransaction = async (cancelReason) => {
+    const { id } = cancelModal;
+    setCancelModal(prev => ({ ...prev, loading: true }));
+    try {
+      await api.patch(`/transactions/${id}/cancel`, { cancelReason });
+      
+      setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'CANCELLED', cancelReason } : t));
+      
+      showToast('success', 'Transaksi berhasil dibatalkan.');
+      setCancelModal({ isOpen: false, id: null, customerName: '', loading: false });
+      fetchTransactions(page);
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Gagal membatalkan transaksi');
+      setCancelModal(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   const filtered = filter === 'ALL'
     ? transactions
@@ -146,32 +211,43 @@ export default function Tracking() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
-        {['ALL', 'TERLAMBAT', 'PENDING', 'PROSES', 'SELESAI', 'DIAMBIL'].map(st => (
-           <button
-             key={st}
-             onClick={() => setFilter(st)}
-             className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all whitespace-nowrap border ${
-               filter === st 
-                 ? 'bg-primary text-secondary border-primary shadow-lg shadow-primary/20' 
-                 : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-             }`}
-           >
-             {st === 'ALL' ? 'Semua Status' : st}
-           </button>
-        ))}
+      <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar font-sans">
+        {['ALL', 'TERLAMBAT', 'PENDING', 'PROSES', 'SELESAI', 'DIAMBIL', 'CANCELLED'].map(st => {
+           const labelMap = {
+             ALL: 'Semua Status',
+             TERLAMBAT: 'Terlambat ⚠️',
+             PENDING: 'Pending',
+             PROSES: 'Proses',
+             SELESAI: 'Selesai',
+             DIAMBIL: 'Diambil',
+             CANCELLED: 'Dibatalkan 🛑'
+           };
+           return (
+             <button
+               key={st}
+               onClick={() => setFilter(st)}
+               className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all whitespace-nowrap border ${
+                 filter === st 
+                   ? 'bg-primary text-secondary border-primary shadow-lg shadow-primary/20' 
+                   : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+               }`}
+             >
+               {labelMap[st] || st}
+             </button>
+           );
+        })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pt-2">
         {filtered.length === 0 && !loading && (
           <div className="md:col-span-2 xl:col-span-3 pb-8 pt-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-3xl bg-white/50">
             <div className="w-16 h-16 bg-white rounded-full border border-slate-200 flex items-center justify-center mb-4"><Search size={24} className="text-slate-400"/></div>
-            <p className="text-slate-500 font-bold text-lg">Horee! Tidak ada antrian transaksi.</p>
+            <p className="text-slate-500 font-bold text-lg">Tidak ada antrian transaksi.</p>
           </div>
         )}
         
         {filtered.map(t => {
-          const config = STATUS_CONFIG[t.status];
+          const config = STATUS_CONFIG[t.status] || STATUS_CONFIG.PENDING;
           
           return (
             <div key={t.id} className="glass-card bg-white p-6 rounded-3xl hover:-translate-y-1 transition-transform duration-300 relative overflow-hidden group">
@@ -190,7 +266,7 @@ export default function Tracking() {
                    </div>
                  </div>
                  <span className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border ${config.bg} ${config.color} ${config.border}`}>
-                   {t.status}
+                   {t.status === 'CANCELLED' ? 'BATAL' : t.status}
                  </span>
                 {t.isOverdue && (
                   <span className="ml-2 px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
@@ -205,40 +281,85 @@ export default function Tracking() {
                   <span className="text-primary font-black">Rp {t.totalPrice.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 font-semibold">Metode Bayar</span>
+                  <span className={`font-bold ${t.paymentMethod === 'BAYAR_NANTI' ? 'text-amber-600' : 'text-primary'}`}>
+                    {t.paymentMethod === 'BAYAR_NANTI' ? '⏳ Bayar Nanti' : t.paymentMethod}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500 font-semibold">Tanggal Masuk</span>
                   <span className="text-primary font-bold">{new Date(t.startDate).toLocaleDateString('id-ID')}</span>
                 </div>
-                {t.estimatedCompletionAt && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-semibold">Estimasi Selesai</span>
-                    <span className={`font-bold ${t.isOverdue ? 'text-rose-600' : 'text-primary'}`}>
-                      {new Date(t.estimatedCompletionAt).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                )}
-                {t.customerPhone && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-semibold flex items-center gap-1.5"><Phone size={12}/> Kontak</span>
-                    <span className="text-primary font-bold">{t.customerPhone}</span>
-                  </div>
+                {t.status === 'CANCELLED' ? (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-rose-500 font-semibold">Alasan Batal</span>
+                      <span className="text-rose-600 font-bold max-w-[150px] truncate text-right" title={t.cancelReason}>
+                        {t.cancelReason || 'Salah Input Data'}
+                      </span>
+                    </div>
+                    {t.cancelledAt && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-rose-500 font-semibold">Waktu Batal</span>
+                        <span className="text-rose-600 font-bold">
+                          {new Date(t.cancelledAt).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {t.estimatedCompletionAt && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-500 font-semibold">Estimasi Selesai</span>
+                        <span className={`font-bold ${t.isOverdue ? 'text-rose-600' : 'text-primary'}`}>
+                          {new Date(t.estimatedCompletionAt).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    )}
+                    {t.customerPhone && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-500 font-semibold flex items-center gap-1.5"><Phone size={12}/> Kontak</span>
+                        <span className="text-primary font-bold">{t.customerPhone}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
               <div className="space-y-2">
-                {NEXT_STATUS[t.status] ? (
-                   <button
-                     onClick={() => handleUpdateStatus(t.id, t.status)}
-                     className="w-full flex items-center justify-center gap-2 py-3.5 bg-primary hover:bg-primary-light text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-primary/20 group/btn"
-                   >
-                     Pindahkan ke {NEXT_STATUS[t.status]}
-                     <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform"/>
-                   </button>
-                ) : (
-                   <div className="w-full flex items-center justify-center gap-2 py-3.5 bg-slate-100 text-slate-500 font-bold rounded-xl border border-slate-200">
-                     <Check size={18}/> Transaksi Selesai Total
+                {t.status === 'CANCELLED' ? (
+                   <div className="w-full flex items-center justify-center gap-2 py-3.5 bg-rose-50 text-rose-500 border border-rose-100 font-bold rounded-xl">
+                     <X size={18}/> Cucian Dibatalkan
                    </div>
-                )}
+                ) : (
+                  <div className="flex gap-2">
+                    {NEXT_STATUS[t.status] ? (
+                       <button
+                         onClick={() => handleUpdateStatus(t.id, t.status)}
+                         className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-primary hover:bg-primary-light text-white font-bold rounded-xl transition-all duration-300 shadow-lg shadow-primary/20 group/btn active:scale-[0.98]"
+                       >
+                         Pindahkan ke {NEXT_STATUS[t.status]}
+                         <ArrowRight size={16} className="group-hover/btn:translate-x-1 transition-transform"/>
+                       </button>
+                    ) : (
+                       <div className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-100 text-slate-500 font-bold rounded-xl border border-slate-200">
+                         <Check size={18}/> Selesai Total
+                       </div>
+                    )}
 
+                    {['PENDING', 'PROSES', 'SELESAI'].includes(t.status) && (
+                      <button
+                        type="button"
+                        onClick={() => setCancelModal({ isOpen: true, id: t.id, customerName: t.customerName || 'Pelanggan', loading: false })}
+                        className="px-3.5 py-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-500 hover:text-rose-600 font-bold rounded-xl transition-all active:scale-95"
+                        title="Batalkan cucian"
+                      >
+                        <X size={18} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -276,6 +397,23 @@ export default function Tracking() {
         confirmVariant="primary"
         onConfirm={handleConfirmStatusUpdate}
         onCancel={() => setConfirmDialog({ isOpen: false, id: null, currentStatus: null })}
+      />
+
+      <PaymentFinalizeModal
+        isOpen={finalizeModal.isOpen}
+        totalPrice={finalizeModal.totalPrice}
+        customerName={finalizeModal.customerName}
+        loading={finalizeModal.loading}
+        onConfirm={handleFinalizePayment}
+        onCancel={() => setFinalizeModal({ isOpen: false, id: null, totalPrice: 0, customerName: '', loading: false })}
+      />
+
+      <CancelTransactionModal
+        isOpen={cancelModal.isOpen}
+        customerName={cancelModal.customerName}
+        loading={cancelModal.loading}
+        onConfirm={handleCancelTransaction}
+        onCancel={() => setCancelModal({ isOpen: false, id: null, customerName: '', loading: false })}
       />
     </div>
   );

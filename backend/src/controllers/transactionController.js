@@ -291,6 +291,17 @@ const updateStatus = async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
 
+    if (existing.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Transaksi yang telah dibatalkan tidak dapat diubah statusnya.' });
+    }
+
+    if (status === 'DIAMBIL' && existing.paymentMethod === 'BAYAR_NANTI') {
+      return res.status(400).json({
+        code: 'PAYMENT_NOT_FINALIZED',
+        error: 'Transaksi Bayar Nanti harus difinalisasi pembayarannya saat diambil.'
+      });
+    }
+
     // Validate Status Transitions
     const VALID_TRANSITIONS = {
       PENDING: ['PROSES'],
@@ -333,6 +344,99 @@ const updateStatus = async (req, res) => {
     res.json({ ...transaction, whatsapp: waResult });
   } catch (error) {
     sendError(res, error, 500, 'Gagal mengubah status transaksi');
+  }
+};
+
+const cancelTransaction = async (req, res) => {
+  const { id } = req.params;
+  const { cancelReason } = req.body;
+  try {
+    const transaction = await prisma.$transaction(async (tx) => {
+      const existing = await tx.transaction.findFirst({
+        where: { id, businessId: req.user.businessId },
+      });
+      if (!existing) {
+        throw new DomainError(404, 'TRANSACTION_NOT_FOUND', 'Transaksi tidak ditemukan');
+      }
+      if (existing.status === 'DIAMBIL') {
+        throw new DomainError(400, 'CANNOT_CANCEL_PICKED_UP', 'Transaksi yang sudah diambil tidak dapat dibatalkan');
+      }
+      if (existing.status === 'CANCELLED') {
+        throw new DomainError(400, 'ALREADY_CANCELLED', 'Transaksi sudah dibatalkan sebelumnya');
+      }
+
+      // If it used membership quota, restore it
+      if (existing.customerMembershipId) {
+        await membershipService.restoreQuotaAndCleanupLogs(tx, existing.id);
+      }
+
+      return await tx.transaction.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancelReason,
+          cancelledById: req.user.id,
+        },
+      });
+    });
+
+    res.json({ message: 'Transaksi berhasil dibatalkan', transaction });
+  } catch (error) {
+    handleControllerError(res, error, 'Gagal membatalkan transaksi');
+  }
+};
+
+const finalizePayment = async (req, res) => {
+  const { id } = req.params;
+  const { paymentMethod, notify = true } = req.body;
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.transaction.findFirst({
+        where: { id, businessId: req.user.businessId },
+      });
+      if (!existing) {
+        throw new DomainError(404, 'TRANSACTION_NOT_FOUND', 'Transaksi tidak ditemukan');
+      }
+      if (existing.status !== 'SELESAI') {
+        throw new DomainError(400, 'STATUS_NOT_READY', 'Pembayaran final hanya bisa dipilih ketika cucian sudah selesai');
+      }
+      if (existing.paymentMethod !== 'BAYAR_NANTI') {
+        throw new DomainError(400, 'NOT_PAY_LATER', 'Transaksi ini tidak menggunakan metode Bayar Nanti');
+      }
+
+      const updated = await tx.transaction.update({
+        where: { id },
+        data: {
+          paymentMethod: paymentMethod,
+          status: 'DIAMBIL',
+          endDate: new Date(),
+        },
+      });
+      return updated;
+    });
+
+    let waResult = { ok: false, skipped: true };
+    if (notify && result.customerPhone) {
+      const setting = await prisma.businessSetting.findUnique({ where: { businessId: req.user.businessId } });
+      let allowedStates = ['PENDING', 'SELESAI']; // default
+      if (setting?.whatsappNotificationStates) {
+        try {
+          allowedStates = JSON.parse(setting.whatsappNotificationStates);
+        } catch (e) { }
+      }
+
+      if (allowedStates.includes('DIAMBIL')) {
+        waResult = await whatsappService.sendStatusUpdate({
+          businessId: req.user.businessId,
+          transaction: result,
+        });
+      }
+    }
+
+    res.json({ ...result, whatsapp: waResult });
+  } catch (error) {
+    handleControllerError(res, error, 'Gagal memfinalisasi pembayaran');
   }
 };
 
@@ -389,8 +493,8 @@ const getExportData = async (req, res) => {
     ]);
 
     // Aggregate Summary
-    const totalTransactions = transactions.length;
-    const totalRevenue = transactions.reduce((sum, t) => sum + (t.payableAmount || 0), 0);
+    const totalTransactions = transactions.filter(t => t.status !== 'CANCELLED').length;
+    const totalRevenue = transactions.filter(t => t.status !== 'CANCELLED').reduce((sum, t) => sum + (t.payableAmount || 0), 0);
 
     // Status Breakdown
     const statusBreakdown = transactions.reduce((acc, t) => {
@@ -401,6 +505,7 @@ const getExportData = async (req, res) => {
     // Service Breakdown
     const serviceBreakdown = {};
     transactions.forEach((t) => {
+      if (t.status === 'CANCELLED') return; // Exclude cancelled from service breakdown
       const items = Array.isArray(t.lineItems) ? t.lineItems : [{ serviceName: t.serviceName, qty: t.weight, lineTotal: t.totalPrice }];
       items.forEach((item) => {
         const name = item.serviceName || 'Unknown';
@@ -467,6 +572,7 @@ const getReportCharts = async (req, res) => {
     // 1. Daily Revenue (Trend)
     const revenueMap = {};
     transactions.forEach(t => {
+      if (t.status === 'CANCELLED') return; // Exclude cancelled from charts revenue
       const date = new Date(t.startDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
       revenueMap[date] = (revenueMap[date] || 0) + (t.payableAmount || 0);
     });
@@ -506,5 +612,7 @@ module.exports = {
   updateStatus,
   resendReceipt,
   getExportData,
-  getReportCharts
+  getReportCharts,
+  cancelTransaction,
+  finalizePayment,
 };

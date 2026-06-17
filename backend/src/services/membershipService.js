@@ -194,10 +194,35 @@ const activateCustomerMembership = async ({
   return membership;
 };
 
+const restoreQuotaAndCleanupLogs = async (tx, transactionId) => {
+  const usageLogs = await tx.customerMembershipUsageLog.findMany({
+    where: { transactionId },
+  });
+
+  for (const log of usageLogs) {
+    await tx.customerMembershipQuotaBalance.update({
+      where: {
+        customerMembershipId_serviceId: {
+          customerMembershipId: log.customerMembershipId,
+          serviceId: log.serviceId,
+        },
+      },
+      data: {
+        remainingQty: { increment: log.usedQty },
+      },
+    });
+  }
+
+  await tx.customerMembershipUsageLog.deleteMany({
+    where: { transactionId },
+  });
+};
+
 module.exports = {
   findActiveMembership,
   resolveOwnedActiveTemplate,
   calculateCoverage,
   consumeQuotaAndLog,
   activateCustomerMembership,
+  restoreQuotaAndCleanupLogs,
 };

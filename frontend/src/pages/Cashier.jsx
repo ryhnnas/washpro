@@ -472,13 +472,19 @@ export default function Cashier() {
                  )}
               </div>
 
-              <div className="mt-8">
-                 <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Metode Bayar</label>
-                 <select className="w-full p-2 sm:p-3 bg-secondary border border-slate-200 rounded-xl outline-none text-primary font-bold shadow-inner" value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})}>
-                   <option value="CASH">Tunai (CASH)</option>
-                   <option value="QRIS">Digital (QRIS)</option>
-                 </select>
-              </div>
+               <div className="mt-8">
+                  <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Metode Bayar</label>
+                  <select className="w-full p-2 sm:p-3 bg-secondary border border-slate-200 rounded-xl outline-none text-primary font-bold shadow-inner" value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})}>
+                    <option value="CASH">Tunai (CASH)</option>
+                    <option value="QRIS">Digital (QRIS)</option>
+                    <option value="BAYAR_NANTI">⏳ Bayar Nanti</option>
+                  </select>
+                  {formData.paymentMethod === 'BAYAR_NANTI' && (
+                    <div className="mt-2 text-xs font-medium text-slate-500 bg-slate-50 border border-slate-200 p-2.5 rounded-xl flex items-center gap-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <span className="shrink-0 font-bold">Note:</span> Pembayaran final akan diselesaikan saat pengambilan cucian.
+                    </div>
+                  )}
+               </div>
 
               <div className="mt-6 pt-6 border-t-[3px] border-solid border-slate-200">
                  {membershipPreview?.hasMembership && (
