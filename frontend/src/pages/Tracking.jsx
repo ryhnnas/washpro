@@ -216,10 +216,10 @@ export default function Tracking() {
            const labelMap = {
              ALL: 'Semua Status',
              TERLAMBAT: 'Terlambat ⚠️',
-             PENDING: 'Pending',
-             PROSES: 'Proses',
-             SELESAI: 'Selesai',
-             DIAMBIL: 'Diambil',
+             PENDING: 'PENDING',
+             PROSES: 'PROSES',
+             SELESAI: 'SELESAI',
+             DIAMBIL: 'DIAMBIL',
              CANCELLED: 'Dibatalkan 🛑'
            };
            return (
