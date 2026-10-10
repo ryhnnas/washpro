@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   DollarSign, FileText, TrendingUp, TrendingDown, Sparkles, AlertCircle, ArrowRight, Clock, Users,
@@ -7,7 +7,11 @@ import {
 import { Link } from 'react-router-dom';
 import api from '../lib/axios';
 import DateFilter from '../components/DateFilter';
-import { getDateRange } from '../utils/dateRange';
+import { getDateRange, getTrendRange, validateCustomDate, BUSINESS_TZ_OFFSET } from '../utils/dateRange';
+import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
+import { canAccessStaffMenu } from '../utils/staffAccess';
+import { StaffAccessDenied } from '../components/StaffMenuGate';
 
 const PAYMENT_META = {
   CASH: { label: 'Tunai', color: '#1A365D' },
@@ -51,27 +55,26 @@ const EMPTY_STATS = {
 
 const rupiah = (value) => `Rp ${(value || 0).toLocaleString('id-ID')}`;
 
-// Tren tetap menampilkan 7 hari terakhir saat filter satu hari supaya grafik bermakna.
-const getTrendRange = (startDate, endDate) => {
-  const end = new Date(endDate);
-  const start = new Date(startDate);
-  const minStart = new Date(end);
-  minStart.setDate(minStart.getDate() - 6);
-  minStart.setHours(0, 0, 0, 0);
-  return { startDate: (start < minStart ? start : minStart).toISOString(), endDate };
-};
-
 export default function Dashboard() {
   const [stats, setStats] = useState(EMPTY_STATS);
   const [trend, setTrend] = useState([]);
   const [topServices, setTopServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [panelErrors, setPanelErrors] = useState({ trend: '', top: '' });
+  const [panelLoading, setPanelLoading] = useState({ trend: false, top: false });
+  const [accessDenied, setAccessDenied] = useState(false);
+  const requests = useRef({ generation: 0, trend: 0, top: 0 });
+  const { user } = useAuth();
+  const { settings, refreshSettings } = useApp();
+  const canReport = canAccessStaffMenu(user, settings, 'REPORTS');
   const [reloadKey, setReloadKey] = useState(0);
   const [chartsReady, setChartsReady] = useState(false);
 
   const [dateFilter, setDateFilter] = useState('hari_ini');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
+  const dateValidation = dateFilter === 'kustom' ? validateCustomDate(customDate) : '';
+  const apiMessage = (err, fallback) => err.response?.data?.message || err.response?.data?.error || fallback;
 
   useEffect(() => {
     const t = setTimeout(() => setChartsReady(true), 0);
@@ -82,31 +85,35 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
+    requests.current.generation += 1;
+    if (dateValidation) return undefined;
     const { startDate, endDate } = getDateRange(dateFilter, customDate);
-    const tzOffset = -new Date().getTimezoneOffset();
-    const trendRange = getTrendRange(startDate, endDate);
+    const tzOffset = BUSINESS_TZ_OFFSET;
+    const trendRange = getTrendRange({ startDate, endDate });
 
     const fetchAll = async () => {
-      if (dateFilter === 'kustom' && (!customDate.start || !customDate.end)) {
-        setLoading(false);
-        return;
-      }
       setLoading(true);
       setError('');
+      setPanelErrors({ trend: '', top: '' });
+      setPanelLoading({ trend: false, top: false });
       const [statsRes, trendRes, topRes] = await Promise.allSettled([
         api.get('/dashboard/stats', { params: { startDate, endDate } }),
         api.get('/dashboard/revenue-trend', { params: { ...trendRange, tzOffset } }),
         api.get('/dashboard/top-services', { params: { startDate, endDate } }),
       ]);
       if (cancelled) return;
+      if ([statsRes, trendRes, topRes].some(result => result.status === 'rejected' && result.reason?.response?.data?.code === 'STAFF_PERMISSION_DENIED')) {
+        setAccessDenied(true); setLoading(false); void refreshSettings(); return;
+      }
 
       if (statsRes.status === 'fulfilled') {
         setStats({ ...EMPTY_STATS, ...statsRes.value.data });
       } else {
-        console.error(statsRes.reason);
         setStats(EMPTY_STATS);
-        setError(statsRes.reason?.response?.data?.error || 'Gagal memuat data dashboard.');
+        setError(apiMessage(statsRes.reason, 'Gagal memuat data dashboard.'));
       }
+      setPanelErrors({ trend: trendRes.status === 'rejected' ? apiMessage(trendRes.reason, 'Gagal memuat tren pendapatan.') : '',
+        top: topRes.status === 'rejected' ? apiMessage(topRes.reason, 'Gagal memuat layanan terlaris.') : '' });
       setTrend(trendRes.status === 'fulfilled' ? trendRes.value.data?.data || [] : []);
       setTopServices(topRes.status === 'fulfilled' ? topRes.value.data?.data || [] : []);
       setLoading(false);
@@ -114,7 +121,34 @@ export default function Dashboard() {
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [dateFilter, customDate, reloadKey]);
+  }, [dateFilter, customDate, dateValidation, reloadKey, refreshSettings]);
+
+  const retryPanel = async (panel) => {
+    if (dateValidation) return;
+    const generation = requests.current.generation;
+    const id = ++requests.current[panel];
+    const range = getDateRange(dateFilter, customDate);
+    setPanelLoading(prev => ({ ...prev, [panel]: true }));
+    const current = () => generation === requests.current.generation && id === requests.current[panel];
+    try {
+      const response = await api.get(panel === 'trend' ? '/dashboard/revenue-trend' : '/dashboard/top-services', {
+        params: panel === 'trend' ? { ...getTrendRange(range), tzOffset: BUSINESS_TZ_OFFSET } : range,
+      });
+      if (!current()) return;
+      if (panel === 'trend') setTrend(response.data.data || []); else setTopServices(response.data.data || []);
+      setPanelErrors(prev => ({ ...prev, [panel]: '' }));
+    } catch (err) {
+      if (!current()) return;
+      if (err.response?.data?.code === 'STAFF_PERMISSION_DENIED') { setAccessDenied(true); void refreshSettings(); }
+      else setPanelErrors(prev => ({ ...prev, [panel]: apiMessage(err, panel === 'trend' ? 'Gagal memuat tren pendapatan.' : 'Gagal memuat layanan terlaris.') }));
+    } finally { if (current()) setPanelLoading(prev => ({ ...prev, [panel]: false })); }
+  };
+  if (accessDenied) return <StaffAccessDenied />;
+  if (dateValidation || error) return <div className="space-y-4">
+    <h1 className="text-3xl font-bold text-primary">Dashboard</h1>
+    <DateFilter filter={dateFilter} setFilter={setDateFilter} customDate={customDate} setCustomDate={setCustomDate} />
+    {error && !dateValidation && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800"><p>{error}</p><button type="button" onClick={retry} className="font-bold underline">Coba lagi</button></div>}
+  </div>;
 
   if (loading) {
     return (
@@ -261,7 +295,9 @@ export default function Dashboard() {
           </span>
         </div>
         <div className="w-full min-w-0">
-          {chartsReady && trend.length > 0 ? (
+          {panelLoading.trend ? <p role="status">Memuat tren pendapatan...</p> : panelErrors.trend ? (
+            <PanelError message={panelErrors.trend} label="Muat ulang tren pendapatan" onRetry={() => retryPanel('trend')} />
+          ) : chartsReady && trend.length > 0 ? (
             <ResponsiveContainer width="100%" height={288} minWidth={1} minHeight={1}>
               <AreaChart data={trend} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                 <defs>
@@ -362,7 +398,9 @@ export default function Dashboard() {
             <div className="p-2 bg-tertiary/20 rounded-lg text-tertiary-hover"><Trophy size={20} /></div>
             Layanan Terlaris
           </h3>
-          {topServices.length === 0 ? (
+          {panelLoading.top ? <p role="status">Memuat layanan terlaris...</p> : panelErrors.top ? (
+            <PanelError message={panelErrors.top} label="Muat ulang layanan terlaris" onRetry={() => retryPanel('top')} />
+          ) : topServices.length === 0 ? (
             <p className="text-sm text-slate-500 font-medium py-10 text-center">Belum ada layanan terjual di periode ini.</p>
           ) : (
             <ol className="space-y-4">
@@ -388,9 +426,9 @@ export default function Dashboard() {
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
         <div className="p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-50">
           <h3 className="text-xl font-black text-primary">Pesanan Masuk (Hari Ini)</h3>
-          <Link to="/reports" className="text-sm font-bold text-primary hover:text-tertiary transition-colors flex items-center gap-1">
+          {canReport && <Link to="/reports" className="text-sm font-bold text-primary hover:text-tertiary transition-colors flex items-center gap-1">
             Lihat Semua Laporan <ArrowRight size={16} />
-          </Link>
+          </Link>}
         </div>
 
         {dateFilter === 'hari_ini' ? (
@@ -415,7 +453,7 @@ export default function Dashboard() {
                   stats.todayOrders.map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 font-bold text-slate-500">
-                        {new Date(t.startDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(t.startDate).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })}
                       </td>
                       <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 font-black text-primary truncate">{t.customerName || '-'}</td>
                       <td className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 truncate">{t.serviceName}</td>
@@ -446,9 +484,9 @@ export default function Dashboard() {
             <AlertCircle size={48} className="text-slate-300 mb-4" />
             <h4 className="text-lg font-bold text-slate-600 mb-2">Riwayat Di Luar Jangkauan Hari Ini</h4>
             <p className="text-slate-500 max-w-md text-sm">Anda sedang memfilter tanggal selain Hari Ini. Untuk melihat daftar pesanan secara lengkap, silakan tuju halaman laporan.</p>
-            <Link to="/reports" className="mt-4 px-6 py-2.5 bg-primary text-white font-bold rounded-xl shadow-md hover:bg-primary-light transition-colors">
+            {canReport && <Link to="/reports" className="mt-4 px-6 py-2.5 bg-primary text-white font-bold rounded-xl shadow-md hover:bg-primary-light transition-colors">
               Buka Laporan
-            </Link>
+            </Link>}
           </div>
         )}
       </div>
@@ -517,4 +555,10 @@ function MiniMetric({ icon, label, value, sub, valueTone, subTone }) {
       {sub && <p className={`text-[11px] font-medium mt-0.5 ${SUB_TONES[subTone] || 'text-slate-500'}`}>{sub}</p>}
     </div>
   );
+}
+
+function PanelError({ message, label, onRetry }) {
+  return <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800">
+    <p>{message}</p><button type="button" onClick={onRetry} className="mt-2 font-bold underline">{label}</button>
+  </div>;
 }

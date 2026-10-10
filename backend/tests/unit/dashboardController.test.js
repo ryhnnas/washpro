@@ -18,6 +18,7 @@ const group = (status, paymentMethod, count, amount) => ({
 });
 
 describe('getDashboardStats', () => {
+  afterEach(() => jest.useRealTimers());
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.transaction.groupBy.mockResolvedValue([]);
@@ -57,6 +58,20 @@ describe('getDashboardStats', () => {
       { name: 'PENDING', value: 2 }, { name: 'PROSES', value: 3 }, { name: 'SELESAI', value: 5 },
       { name: 'DIAMBIL', value: 0 }, { name: 'CANCELLED', value: 2 },
     ]);
+  });
+
+  it('uses WIB today for orders even on a UTC server and a historical filter', async () => {
+    const originalTZ = process.env.TZ;
+    process.env.TZ = 'UTC';
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-10T17:30:00Z'));
+    try {
+      await getDashboardStats({ user: { businessId: 'biz-a' }, query: {
+        startDate: '2026-09-01T17:00:00Z', endDate: '2026-09-02T16:59:59Z',
+      } }, makeRes());
+      expect(prisma.transaction.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
+        businessId: 'biz-a', startDate: { gte: new Date('2026-10-10T17:00:00Z'), lte: new Date('2026-10-11T16:59:59.999Z') },
+      } }));
+    } finally { if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ; }
   });
 
   it('queries the previous period of equal length and tenant-scopes every query', async () => {

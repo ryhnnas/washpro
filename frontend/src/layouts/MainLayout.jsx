@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 const logo = '/logo.png';
 import SubscriptionBanner from '../components/SubscriptionBanner';
+import { canAccessStaffMenu } from '../utils/staffAccess';
 
 export default function MainLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -31,18 +32,7 @@ export default function MainLayout() {
     { name: 'Pengaturan Akun', path: '/profile', icon: <User size={22} />, id: 'PROFILE' },
   ];
 
-  let allowedItems = navItems;
-  if (user?.role === 'STAFF') {
-    if (settings && settings.staffAllowedMenus) {
-      try {
-        const allowed = JSON.parse(settings.staffAllowedMenus);
-        // CASHIER, TRACKING, dan PROFILE wajib aktif untuk semua staf
-        allowedItems = navItems.filter(item => allowed.includes(item.id) || ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
-      } catch { /* ignore invalid staffAllowedMenus JSON */ }
-    } else {
-      allowedItems = navItems.filter(item => ['CASHIER', 'TRACKING', 'PROFILE'].includes(item.id));
-    }
-  }
+  const allowedItems = navItems.filter(item => canAccessStaffMenu(user, settings, item.id));
 
   return (
     <div className="flex h-screen overflow-hidden bg-secondary text-primary font-sans">

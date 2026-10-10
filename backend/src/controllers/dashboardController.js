@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const { sendError } = require('../utils/errorResponse');
+const { getWibDayBounds } = require('../utils/businessDate');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_TREND_DAYS = 366;
@@ -72,10 +73,7 @@ const getDashboardStats = async (req, res) => {
     const dateFilter = range ? { startDate: { gte: range.start, lte: range.end } } : {};
 
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
+    const { start: startOfToday, end: endOfToday } = getWibDayBounds(now);
 
     let previousFilter = null;
     if (range) {

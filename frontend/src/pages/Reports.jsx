@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FileSpreadsheet, Search, ChevronLeft, ChevronRight, DollarSign, FileText, Loader2, TrendingUp } from 'lucide-react';
 import api from '../lib/axios';
 import DateFilter from '../components/DateFilter';
-import { getDateRange } from '../utils/dateRange';
+import { getDateRange, validateCustomDate } from '../utils/dateRange';
 import toast from 'react-hot-toast';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -20,6 +20,7 @@ export default function Reports() {
   const [dateFilter, setDateFilter] = useState('hari_ini');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
   const [page, setPage] = useState(1);
+  const invalidRange = dateFilter === 'kustom' && !!validateCustomDate(customDate);
 
   const [dailyRevenue, setDailyRevenue] = useState([]);
   const [statusBreakdown, setStatusBreakdown] = useState([]);
@@ -45,6 +46,7 @@ export default function Reports() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        if (invalidRange) { setLoading(false); return; }
         const { startDate, endDate } = getDateRange(dateFilter, customDate);
         if (dateFilter === 'kustom' && (!customDate.start || !customDate.end)) {
           setLoading(false);
@@ -68,10 +70,11 @@ export default function Reports() {
       }
     };
     fetchData();
-  }, [page, debouncedSearch, dateFilter, customDate]);
+  }, [page, debouncedSearch, dateFilter, customDate, invalidRange]);
 
   // ==================== FUNGSI EXPORT PDF (SUDAH DIPERBAIKI) ====================
   const exportToPDF = async () => {
+    if (invalidRange) { toast.error(validateCustomDate(customDate)); return; }
     setExportLoading(true);
     const toastId = toast.loading('Membuat Laporan PDF...');
 
@@ -190,6 +193,7 @@ export default function Reports() {
   };
 
   const exportToExcel = async () => {
+    if (invalidRange) { toast.error(validateCustomDate(customDate)); return; }
     setExportLoading(true);
     const toastId = toast.loading('Membuat File Excel...');
     try {
@@ -714,10 +718,10 @@ export default function Reports() {
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
-          <button onClick={exportToPDF} disabled={exportLoading} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
+          <button onClick={exportToPDF} disabled={exportLoading || invalidRange} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
             {exportLoading ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />} Export PDF
           </button>
-          <button onClick={exportToExcel} disabled={exportLoading} className="flex-1 sm:flex-none px-6 py-3 bg-emerald-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
+          <button onClick={exportToExcel} disabled={exportLoading || invalidRange} className="flex-1 sm:flex-none px-6 py-3 bg-emerald-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
             {exportLoading ? <Loader2 className="animate-spin" size={18} /> : <FileSpreadsheet size={18} />} Export Excel
           </button>
         </div>
