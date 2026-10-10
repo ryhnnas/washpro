@@ -137,11 +137,13 @@ export default function DashboardTab({ stats, error, onRetry, onNavigate }) {
             <div className="flex items-end gap-3 h-40" role="img" aria-label="Grafik pendapatan 6 bulan terakhir">
               {revenue.trend.map((m) => (
                 <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full gap-1" title={`${monthLabel(m.month)}: ${formatIDR(m.revenue)} (${m.count} pembayaran)`}>
-                  <span className="text-[10px] text-slate-500">{m.revenue > 0 ? `${Math.round(m.revenue / 1000)}k` : ''}</span>
-                  <div
-                    className="w-full rounded-t-md bg-indigo-400/70"
-                    style={{ height: `${Math.max(m.revenue > 0 ? 4 : 1, Math.round((m.revenue / trendMax) * 100))}%` }}
-                  />
+                  <span className="text-[10px] text-slate-500 h-4">{m.revenue > 0 ? `${Math.round(m.revenue / 1000)}k` : ''}</span>
+                  <div className="h-28 w-full flex items-end">
+                    <div
+                      className="w-full rounded-t-md bg-indigo-400/70"
+                      style={{ height: `${Math.max(m.revenue > 0 ? 4 : 1, Math.round((m.revenue / trendMax) * 100))}%` }}
+                    />
+                  </div>
                   <span className="text-xs text-slate-400">{monthLabel(m.month)}</span>
                 </div>
               ))}
