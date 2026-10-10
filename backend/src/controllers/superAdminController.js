@@ -6,6 +6,9 @@ const emailService = require('../services/emailService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 const { sendError } = require('../utils/errorResponse');
 const { generateCsrfToken, setCsrfCookie } = require('../middleware/csrf');
+const { resolveReactivationStatus } = require('../services/businessLifecycleService');
+
+const REACTIVATION_LABEL = { ACTIVE: 'Aktif', TRIAL: 'Trial', EXPIRED: 'Kadaluarsa' };
 
 // ==================== LOGIN ====================
 const login = async (req, res) => {
@@ -119,7 +122,14 @@ const toggleBusiness = async (req, res) => {
     const business = await prisma.business.findUnique({ where: { id: businessId } });
     if (!business) return res.status(404).json({ message: 'Bisnis tidak ditemukan' });
 
-    const newStatus = action === 'SUSPEND' ? 'SUSPENDED' : 'ACTIVE';
+    let newStatus = 'SUSPENDED';
+    if (action !== 'SUSPEND') {
+      const outcome = resolveReactivationStatus(business);
+      if (!outcome.ok) {
+        return res.status(400).json({ message: 'Toko sudah dihapus dan tidak dapat diaktifkan kembali.' });
+      }
+      newStatus = outcome.status;
+    }
     const updated = await prisma.business.update({
       where: { id: businessId },
       data: { subscriptionStatus: newStatus },
@@ -158,7 +168,10 @@ const toggleBusiness = async (req, res) => {
       }
     }
 
-    res.json({ message: `Toko berhasil ${action === 'SUSPEND' ? 'ditangguhkan' : 'diaktifkan'}`, business: updated });
+    const message = action === 'SUSPEND'
+      ? 'Toko berhasil ditangguhkan'
+      : `Toko diaktifkan kembali dengan status ${REACTIVATION_LABEL[newStatus]}`;
+    res.json({ message, business: updated });
   } catch (err) {
     sendError(res, err, 500);
   }
@@ -191,6 +204,8 @@ const deleteBusiness = async (req, res) => {
         subscriptionStatus: 'SUSPENDED',
       },
     });
+
+    invalidateSubscriptionCache(businessId);
 
     res.json({
       message: `Toko "${business.name}" telah dinonaktifkan. Data masih tersimpan dan dapat dipulihkan oleh tim teknis jika diperlukan.`,
@@ -307,7 +322,8 @@ const rejectPayment = async (req, res) => {
       where: { id: paymentId },
       data: {
         status: 'REJECTED',
-        approvedById: superAdminId,
+        rejectedById: superAdminId,
+        rejectedAt: new Date(),
         rejectionReason: reason || 'Bukti pembayaran tidak valid.',
       },
     });
