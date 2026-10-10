@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Store, CreditCard, Package, LogOut,
@@ -24,6 +24,7 @@ const TAB_ICONS = {
 };
 
 const PAGE_SIZE = 20;
+const LIST_TABS = ['businesses', 'payments', 'plans'];
 const apiMessage = (err, fallback) => err.response?.data?.message || err.response?.data?.error || fallback;
 
 export default function SuperAdminDashboard() {
@@ -45,6 +46,7 @@ export default function SuperAdminDashboard() {
   const [planModal, setPlanModal] = useState(null);
   const [toast, setToast] = useState(null);
   const [admin, setAdmin] = useState(null);
+  const listRequestId = useRef(0);
   const navigate = useNavigate();
 
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -65,6 +67,8 @@ export default function SuperAdminDashboard() {
   }, []);
 
   const fetchBusinesses = useCallback(async () => {
+    const requestId = ++listRequestId.current;
+    const isLatest = () => requestId === listRequestId.current;
     setLoading(true);
     setListError('');
     try {
@@ -72,41 +76,51 @@ export default function SuperAdminDashboard() {
       if (businessQuery.search) params.search = businessQuery.search;
       if (businessQuery.status) params.status = businessQuery.status;
       const r = await superAdminService.getBusinesses(params);
+      if (!isLatest()) return;
       setBusinesses(r.data.businesses || []);
       setBusinessTotal(r.data.total || 0);
     } catch (err) {
+      if (!isLatest()) return;
       setBusinesses([]);
       setListError(apiMessage(err, 'Gagal memuat daftar toko.'));
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   }, [businessQuery]);
 
   const fetchPayments = useCallback(async () => {
+    const requestId = ++listRequestId.current;
+    const isLatest = () => requestId === listRequestId.current;
     setLoading(true);
     setListError('');
     try {
       const r = await superAdminService.getPayments({ status: paymentFilter, page: paymentPage, limit: PAGE_SIZE });
+      if (!isLatest()) return;
       setPayments(r.data.payments || []);
       setPaymentTotal(r.data.total || 0);
     } catch (err) {
+      if (!isLatest()) return;
       setPayments([]);
       setListError(apiMessage(err, 'Gagal memuat daftar pembayaran.'));
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   }, [paymentFilter, paymentPage]);
 
   const fetchPlans = useCallback(async () => {
+    const requestId = ++listRequestId.current;
+    const isLatest = () => requestId === listRequestId.current;
     setLoading(true);
     setListError('');
     try {
       const r = await superAdminService.getPlans();
+      if (!isLatest()) return;
       setPlans(r.data || []);
     } catch (err) {
+      if (!isLatest()) return;
       setListError(apiMessage(err, 'Gagal memuat daftar paket.'));
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   }, []);
 
@@ -123,6 +137,11 @@ export default function SuperAdminDashboard() {
   useEffect(() => { if (tab === 'plans') fetchPlans(); }, [tab, fetchPlans]);
 
   const changeTab = (id) => {
+    if (id !== tab) {
+      // Discard in-flight list requests from the previous tab.
+      listRequestId.current += 1;
+      if (!LIST_TABS.includes(id)) setLoading(false);
+    }
     setListError('');
     setTab(id);
   };
