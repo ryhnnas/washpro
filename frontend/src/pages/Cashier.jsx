@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Send, Save, User, Package, Calendar, Search, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import api from '../lib/axios';
 import { useApp } from '../context/AppContext';
+import { calculateCashierPreview } from '../utils/cashierPreview';
+import { buildCashierReceipt, classifyWhatsAppOutcome } from '../utils/cashierReceipt';
 
 /**
  * CATATAN PENTING — MEMBERSHIP COVERAGE CALCULATION
@@ -16,7 +18,10 @@ import { useApp } from '../context/AppContext';
 export default function Cashier() {
   const [services, setServices] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const { settings } = useApp(); // Ambil dari context, tidak fetch ulang
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [servicesError, setServicesError] = useState('');
+  const serviceRequestId = useRef(0);
+  const { settings, settingsLoading, settingsError, refreshSettings } = useApp();
   
   const [formData, setFormData] = useState({
     customerName: '',
@@ -27,34 +32,59 @@ export default function Cashier() {
   });
   
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [totalPrice, setTotalPrice] = useState(0);
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success'|'error'|'warning', message: string }
-  const [membershipPreview, setMembershipPreview] = useState(null);
 
   const suggestionRef = useRef(null);
 
-  const [showManualWA, setShowManualWA] = useState(false);
-  const [lastTransaction, setLastTransaction] = useState(null);
+  const [savedTransaction, setSavedTransaction] = useState(null);
+  const [customersError, setCustomersError] = useState('');
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [refreshError, setRefreshError] = useState('');
+  const submitPending = useRef(false);
+  const customerRequestId = useRef(0);
+  const loadCustomers = useCallback(async () => {
+    const id = ++customerRequestId.current;
+    setCustomersLoading(true);
+    try {
+      const response = await api.get('/customers', { params: { limit: 100 } });
+      if (id !== customerRequestId.current) return false;
+      setCustomers(response.data.data || []);
+      setCustomersError(''); setRefreshError('');
+      return true;
+    } catch (err) {
+      if (id === customerRequestId.current) setCustomersError(err.response?.data?.message || 'Gagal memuat pelanggan.');
+      return false;
+    } finally { if (id === customerRequestId.current) setCustomersLoading(false); }
+  }, []);
+  const whatsappOutcome = savedTransaction ? classifyWhatsAppOutcome(savedTransaction.whatsapp) : null;
+  const showManualWA = savedTransaction?.customerPhone && whatsappOutcome !== 'sent';
 
+  const loadServices = useCallback(async () => {
+    const id = ++serviceRequestId.current;
+    setServicesLoading(true);
+    try {
+      const response = await api.get('/services');
+      if (id !== serviceRequestId.current) return;
+      setServices(response.data || []); setServicesError('');
+    } catch (err) {
+      if (id === serviceRequestId.current) setServicesError(err.response?.data?.message || 'Gagal memuat layanan.');
+    } finally { if (id === serviceRequestId.current) setServicesLoading(false); }
+  }, []);
   useEffect(() => {
-    Promise.all([
-      api.get('/services').catch(() => ({ data: [] })),
-      api.get('/customers?limit=100').catch(() => ({ data: { data: [] } }))
-    ]).then(([resSvc, resCust]) => {
-      setServices(resSvc.data);
-      setCustomers(resCust.data.data || []);
-    });
-    
+    void loadServices(); void loadCustomers();
     const handleClickOutside = (event) => {
       if (suggestionRef.current && !suggestionRef.current.contains(event.target)) {
         setShowSuggestions(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      serviceRequestId.current += 1; customerRequestId.current += 1;
+    };
+  }, [loadServices, loadCustomers]);
 
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(formData.customerName.toLowerCase()) || 
@@ -79,15 +109,19 @@ export default function Cashier() {
     })
     .filter(Boolean), [formData.items, services]);
   const itemRows = formData.items || [];
-  const matchedCustomer = useMemo(() => customers.find(
-    (c) =>
-      (formData.customerPhone && c.phone === formData.customerPhone) ||
-      (!formData.customerPhone && c.name?.toLowerCase() === formData.customerName?.toLowerCase())
-  ), [customers, formData.customerPhone, formData.customerName]);
+  const matchedCustomer = useMemo(() => formData.customerPhone
+    ? customers.find(c => c.phone === formData.customerPhone) : null,
+  [customers, formData.customerPhone]);
+  const preview = useMemo(() => calculateCashierPreview(selectedItems, matchedCustomer?.membership,
+    settings?.membershipPackages || []), [selectedItems, matchedCustomer, settings]);
+  const totalPrice = preview.totalPrice;
+  const membershipPreview = matchedCustomer?.membership?.isActive ? {
+    ...preview, hasMembership: true, eligible: preview.coveredAmount > 0,
+    reason: 'Semua item tidak tercakup membership.',
+  } : null;
 
   useEffect(() => {
     if (selectedItems.length > 0) {
-      setTotalPrice(selectedItems.reduce((sum, item) => sum + item.qty * item.service.price, 0));
 
       // Ambil estimasi terlama dari semua item — konsisten dengan logika backend
       const maxHours = selectedItems.reduce((max, { service }) => {
@@ -101,165 +135,55 @@ export default function Cashier() {
       d.setHours(d.getHours() + maxHours);
       setEndDate(d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + ' WIB');
     } else {
-      setTotalPrice(0);
       setEndDate('');
     }
   }, [selectedItems]);
 
-  useEffect(() => {
-    if (!selectedItems.length || !matchedCustomer?.membership?.isActive) {
-      setMembershipPreview(null);
-      return;
-    }
-    const itemPreview = selectedItems.map(({ service, qty }) => {
-      const fullPrice = Math.round(qty * service.price);
-      const balance = matchedCustomer.membership.balances?.find((b) => b.serviceId === service.id);
-      const template = settings?.membershipPackages?.find(p => p.id === matchedCustomer.membership.templateId);
-      const pkgItem = template?.items?.find((i) => i.serviceId === service.id);
-      const rate = Number(pkgItem?.deductionRate || 1);
-      if (!balance || rate <= 0) {
-        return {
-          serviceName: service.name,
-          unit: service.unit,
-          eligible: false,
-          reason: 'Tidak termasuk paket',
-          coveredAmount: 0,
-          payableAmount: fullPrice,
-          consumedQuota: 0,
-          remainingBefore: Number(balance?.remainingQty || 0),
-        };
-      }
-      const requiredQuota = qty * rate;
-      const consumedQuota = Math.min(requiredQuota, Number(balance.remainingQty || 0));
-      const ratio = requiredQuota > 0 ? consumedQuota / requiredQuota : 0;
-      const coveredAmount = Math.round(fullPrice * ratio);
-      return {
-        serviceName: service.name,
-        unit: service.unit,
-        eligible: consumedQuota > 0,
-        reason: consumedQuota > 0 ? '' : 'Kuota habis',
-        coveredAmount,
-        payableAmount: Math.max(0, fullPrice - coveredAmount),
-        consumedQuota,
-        remainingBefore: Number(balance.remainingQty || 0),
-      };
-    });
-    const coveredAmount = itemPreview.reduce((sum, item) => sum + item.coveredAmount, 0);
-    const payableAmount = itemPreview.reduce((sum, item) => sum + item.payableAmount, 0);
-    setMembershipPreview({
-      hasMembership: true,
-      eligible: itemPreview.some((i) => i.eligible),
-      reason: itemPreview.some((i) => i.eligible) ? '' : 'Semua item tidak tercakup membership.',
-      coveredAmount,
-      payableAmount,
-      items: itemPreview,
-    });
-  }, [selectedItems, matchedCustomer, settings]);
+  const canSubmit = !loading && !settingsLoading && !settingsError && !!settings &&
+    !servicesLoading && !servicesError && !customersLoading && !customersError && totalPrice > 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitPending.current || !canSubmit) return;
     if (!formData.customerName.trim()) {
-      setFeedback({ type: 'error', message: 'Nama pelanggan wajib diisi.' });
-      return;
+      setFeedback({ type: 'error', message: 'Nama pelanggan wajib diisi.' }); return;
     }
     if (!selectedItems.length || totalPrice <= 0) {
-      setFeedback({ type: 'error', message: 'Tambah minimal 1 layanan dengan jumlah valid.' });
-      return;
+      setFeedback({ type: 'error', message: 'Tambah minimal 1 layanan dengan jumlah valid.' }); return;
     }
-    setLoading(true);
-    setFeedback(null);
-    setShowManualWA(false);
+    submitPending.current = true; setLoading(true); setFeedback(null); setSavedTransaction(null);
+    const payload = {
+      customerName: formData.customerName.trim(), customerPhone: formData.customerPhone,
+      customerAddress: formData.customerAddress, paymentMethod: formData.paymentMethod,
+      items: selectedItems.map(({ service, qty }) => ({ serviceId: service.id, serviceName: service.name, qty })),
+      totalPrice,
+    };
     try {
-      const payload = {
-        customerName: formData.customerName.trim(),
-        customerPhone: formData.customerPhone,
-        customerAddress: formData.customerAddress,
-        paymentMethod: formData.paymentMethod,
-        items: selectedItems.map(({ service, qty }) => ({
-          serviceId: service.id,
-          serviceName: service.name,
-          qty,
-        })),
-        totalPrice,
-      };
-      const res = await api.post('/transactions', payload);
-      const wa = res.data?.whatsapp;
-      const bill = res.data?.membershipBreakdown;
-
-      if (wa?.ok) {
-        setFeedback({ type: 'success', message: 'Transaksi tersimpan & nota digital telah dikirim otomatis ke WhatsApp pelanggan.' });
-      } else if (wa?.skipped) {
-        const reasonMap = {
-          NO_PHONE: 'Pelanggan tidak memiliki nomor HP.',
-          WA_DISABLED: 'WhatsApp Gateway dinonaktifkan di Pengaturan.',
-          WA_DISABLED_GLOBALLY: 'WhatsApp Gateway sedang dalam pemeliharaan.',
-          NO_API_URL: 'URL Gateway belum dikonfigurasi.',
-        };
-        setFeedback({ type: 'warning', message: `Transaksi tersimpan. Auto-kirim WA dilewati: ${reasonMap[wa.reason] || wa.reason}.` });
-        if (wa.reason !== 'NO_PHONE') {
-          setShowManualWA(true);
-          setLastTransaction({ ...payload, totalPrice, endDate });
+      let transaction;
+      try { transaction = (await api.post('/transactions', payload)).data; }
+      catch (err) {
+        if (err.response?.status === 409 && err.response?.data?.code === 'MEMBERSHIP_QUOTA_CHANGED') {
+          const reloaded = await loadCustomers();
+          setFeedback({ type: 'warning', message: reloaded
+            ? 'Kuota membership berubah. Data pelanggan diperbarui; periksa kembali sebelum mengulang transaksi.'
+            : 'Kuota membership berubah; pemuatan ulang gagal. Muat ulang pelanggan sebelum mengulang transaksi.' });
+        } else {
+          setFeedback({ type: 'error', message: err.response?.data?.message || err.response?.data?.error ||
+            'Status penyimpanan belum terkonfirmasi. Periksa Tracking sebelum mengulang.' });
         }
-      } else if (wa?.error) {
-        setFeedback({ type: 'error', message: `Transaksi tersimpan tapi WA gagal terkirim: ${wa.error}` });
-        setShowManualWA(true);
-        setLastTransaction({ ...payload, totalPrice, endDate });
-      } else {
-        setFeedback({ type: 'success', message: 'Transaksi berhasil disimpan.' });
+        return;
       }
-      if (bill?.activeMembershipId) {
-        setFeedback({
-          type: 'success',
-          message: `Transaksi tersimpan. Membership digunakan (cover Rp ${Number(bill.coveredAmount || 0).toLocaleString('id-ID')}) dan dibayar Rp ${Number(bill.payableAmount || 0).toLocaleString('id-ID')}.`,
-        });
-      }
-
-      setFormData({
-        customerName: '',
-        customerPhone: '',
-        customerAddress: '',
-        items: [{ serviceId: '', qty: '' }],
-        paymentMethod: 'CASH'
-      });
-      const resCust = await api.get('/customers?limit=100');
-      setCustomers(resCust.data.data || []);
-    } catch (err) {
-      const code = err.response?.data?.code;
-      if (err.response?.status === 409 && code === 'MEMBERSHIP_QUOTA_CHANGED') {
-        try {
-          const resCust = await api.get('/customers?limit=100');
-          setCustomers(resCust.data.data || []);
-        } catch {
-          /* ignore reload failure */
-        }
-        setFeedback({
-          type: 'warning',
-          message: 'Kuota membership berubah karena transaksi paralel. Data pelanggan dimuat ulang — silakan konfirmasi ulang transaksi.',
-        });
-      } else {
-        setFeedback({ type: 'error', message: err.response?.data?.message || err.response?.data?.error || 'Gagal menyimpan transaksi' });
-      }
-    } finally {
-      setLoading(false);
-    }
+      setSavedTransaction(transaction);
+      setFormData({ customerName: '', customerPhone: '', customerAddress: '', items: [{ serviceId: '', qty: '' }], paymentMethod: 'CASH' });
+      if (!await loadCustomers()) setRefreshError('Transaksi tersimpan, tetapi data pelanggan belum diperbarui.');
+    } finally { submitPending.current = false; setLoading(false); }
   };
 
   const openWhatsApp = () => {
-    const data = lastTransaction || formData;
-    if (!data.customerPhone || data.totalPrice <= 0) {
-      setFeedback({ type: 'warning', message: 'Nomor HP dan total harga harus ada untuk kirim WA.' });
-      return;
-    }
-    let phone = data.customerPhone;
-    if (phone.startsWith('0')) phone = '62' + phone.slice(1);
-
-    const lines = (data.items || [])
-      .map((item, i) => `${i + 1}. ${item.serviceName} - ${item.qty}`)
-      .join('\n');
-    const businessName = settings?.businessName || 'WashPro';
-    const msg = `Halo *Kak ${data.customerName || 'Pelanggan'}*,\n\nTerima kasih telah mempercayakan cucian Anda di ${businessName}.\n\n*Detail Order:*\n${lines}\n*Total Biaya: Rp ${data.totalPrice.toLocaleString('id-ID')}*\nEstimasi Selesai: ${data.endDate || 'Segera'}\n\nTerima kasih!`;
-    const encoded = encodeURIComponent(msg);
-    window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
+    if (!savedTransaction?.customerPhone) return;
+    const phone = savedTransaction.customerPhone.replace(/[^0-9]/g, '').replace(/^0/, '62');
+    const message = buildCashierReceipt(savedTransaction, settings?.businessName);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -271,9 +195,33 @@ export default function Cashier() {
         </div>
       </div>
 
+      {settingsError && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-800">
+        <p>{settingsError}</p><button type="button" onClick={refreshSettings} disabled={settingsLoading} className="font-bold underline">Muat ulang pengaturan</button>
+      </div>}
+      {servicesError && <div role="alert" className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-800">
+        <p>{servicesError}</p><button type="button" onClick={loadServices} disabled={servicesLoading} className="font-bold underline">Muat ulang layanan</button>
+      </div>}
+      {(servicesLoading || customersLoading || settingsLoading) && <p role="status" className="mb-4 text-slate-500">Memuat data kasir...</p>}
+      {!servicesLoading && !servicesError && services.length === 0 && <p className="mb-4 text-slate-600">Belum ada layanan. Minta owner menambahkan layanan sebelum membuat transaksi.</p>}
+      {savedTransaction && (
+        <div role="status" className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+          <p className="font-bold">Transaksi tersimpan — #{savedTransaction.id}</p>
+          <p>Tagihan: Rp {Number(savedTransaction.payableAmount ?? savedTransaction.totalPrice).toLocaleString('id-ID')} · {savedTransaction.paymentMethod === 'BAYAR_NANTI' ? 'Belum dibayar' : savedTransaction.paymentMethod === 'QRIS' ? 'QRIS' : 'Tunai'}</p>
+          <p className={whatsappOutcome === 'failed' ? 'text-rose-700' : 'text-slate-700'}>
+            {whatsappOutcome === 'sent' ? 'Nota WhatsApp terkirim.' : whatsappOutcome === 'queued' ? 'WhatsApp masuk antrian; belum terkirim.' : whatsappOutcome === 'skipped' ? 'WhatsApp tidak dikirim otomatis.' : 'WhatsApp gagal dikirim.'}
+          </p>
+          {showManualWA && <button type="button" onClick={openWhatsApp} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-white"><Send size={14} /> Kirim WA Manual</button>}
+        </div>
+      )}
+      {customersError && (
+        <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
+          <p>{refreshError || customersError}</p>
+          <button type="button" onClick={loadCustomers} disabled={customersLoading} className="mt-2 font-bold underline">Muat ulang pelanggan</button>
+        </div>
+      )}
       {feedback && (
         <div
-          role="status"
+          role={feedback.type === 'error' || feedback.type === 'warning' ? 'alert' : 'status'}
           aria-live="polite"
           className={`mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg sm:rounded-2xl border text-xs sm:text-sm animate-in fade-in slide-in-from-top-2 ${
           feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
@@ -283,14 +231,7 @@ export default function Cashier() {
           {feedback.type === 'success' ? <CheckCircle2 size={18} className="shrink-0 mt-0.5"/> : <AlertTriangle size={18} className="shrink-0 mt-0.5"/>}
           <div className="flex-1">
             <div className="font-bold mb-1">{feedback.message}</div>
-            {showManualWA && (
-              <button 
-                onClick={openWhatsApp}
-                className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 bg-[#25D366] text-white rounded-lg font-bold hover:bg-[#1ebd59] transition-colors"
-              >
-                <Send size={14}/> Kirim WA Manual
-              </button>
-            )}
+
           </div>
           <button onClick={() => setFeedback(null)} className="ml-auto text-current/60 hover:text-current flex-shrink-0"><span className="sr-only">Tutup</span>×</button>
         </div>
@@ -508,9 +449,9 @@ export default function Cashier() {
                    </div>
                  )}
                  <div className="flex justify-between items-center whitespace-nowrap">
-                    <span className="text-xs sm:text-sm text-slate-500 font-bold mb-1">Total Tagihan</span>
+                    <span className="text-xs sm:text-sm text-slate-500 font-bold mb-1">Tagihan setelah membership</span>
                     <span className="text-xl sm:text-2xl lg:text-2xl font-black text-primary tracking-tighter">
-                      Rp {totalPrice.toLocaleString('id-ID')}
+                      Rp {preview.payableAmount.toLocaleString('id-ID')}
                     </span>
                  </div>
               </div>
@@ -521,7 +462,7 @@ export default function Cashier() {
               <button 
                 form="cashier-form"
                 type="submit"
-                disabled={loading || totalPrice <= 0}
+                disabled={!canSubmit}
                 className="premium-button w-full text-sm md:text-lg disabled:opacity-50 disabled:cursor-not-allowed group h-14 md:h-16"
               >
                 <Save size={24} className="group-hover:scale-110 transition-transform" /> {loading ? 'Menyimpan...' : 'Bayar Sekarang'}
