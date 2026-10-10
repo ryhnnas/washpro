@@ -1,15 +1,19 @@
-import { CheckCircle, XCircle, Eye, Loader2, RefreshCw } from 'lucide-react';
+import { Eye, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { formatIDR, STATUS_BADGE, STATUS_LABEL } from '../constants';
+import Pagination from '../components/Pagination';
 
 export default function PaymentsTab({
   payments,
   loading,
+  error,
+  page,
+  total,
+  limit,
+  onPageChange,
   paymentFilter,
   setPaymentFilter,
   onRefresh,
   onViewProof,
-  onApprove,
-  onReject,
 }) {
   return (
     <div>
@@ -35,11 +39,19 @@ export default function PaymentsTab({
           </button>
         </div>
       </div>
+
+      {error && (
+        <div role="alert" className="mb-4 flex items-center justify-between gap-3 bg-red-500/10 border border-red-400/30 text-red-300 rounded-2xl px-4 py-3 text-sm">
+          <span className="flex items-center gap-2"><AlertCircle size={16} aria-hidden="true" /> {error}</span>
+          <button type="button" onClick={onRefresh} className="font-semibold underline">Coba lagi</button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center h-48 text-slate-500" role="status" aria-live="polite">
           <Loader2 size={24} className="animate-spin mr-2" aria-hidden="true" /> Memuat...
         </div>
-      ) : payments.length === 0 ? (
+      ) : payments.length === 0 && !error ? (
         <div className="text-center py-16 text-slate-600">Tidak ada pembayaran dengan status ini.</div>
       ) : (
         <div className="space-y-3">
@@ -62,20 +74,22 @@ export default function PaymentsTab({
                   <Eye size={14} aria-hidden="true" /> Lihat Bukti
                 </button>
                 {p.status === 'PENDING' && (
-                  <>
-                    <button type="button" onClick={() => onApprove(p.id)} className="px-3 py-2 rounded-xl bg-green-500/20 hover:bg-green-500 text-green-400 hover:text-white text-sm font-semibold transition-all flex items-center gap-1.5">
-                      <CheckCircle size={14} aria-hidden="true" /> Approve
-                    </button>
-                    <button type="button" onClick={() => onReject(p.id, 'Bukti tidak valid')} className="px-3 py-2 rounded-xl bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white text-sm font-semibold transition-all flex items-center gap-1.5">
-                      <XCircle size={14} aria-hidden="true" /> Tolak
-                    </button>
-                  </>
+                  <button type="button" onClick={() => onViewProof(p)} className="px-3 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white text-sm font-semibold transition-all">
+                    Tinjau & Putuskan
+                  </button>
+                )}
+                {p.status === 'REJECTED' && p.rejectionReason && (
+                  <span className="self-center text-xs text-slate-500 max-w-[14rem] truncate" title={p.rejectionReason}>
+                    Alasan: {p.rejectionReason}
+                  </span>
                 )}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <Pagination page={page} limit={limit} total={total} onPageChange={onPageChange} />
     </div>
   );
 }
