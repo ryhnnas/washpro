@@ -131,9 +131,8 @@ export default function Cashier() {
         return Math.max(max, hours);
       }, 24);
 
-      const d = new Date();
-      d.setHours(d.getHours() + maxHours);
-      setEndDate(d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + ' WIB');
+      const d = new Date(Date.now() + maxHours * 3600000);
+      setEndDate(d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }) + ' WIB');
     } else {
       setEndDate('');
     }
@@ -387,7 +386,7 @@ export default function Cashier() {
            <div className="glass-card p-4 sm:p-6 md:p-8 rounded-3xl border-b-8 border-b-primary shadow-xl flex flex-col min-h-[350px] sm:min-h-[400px]">
               <div className="text-center pb-6 border-b-2 border-dashed border-slate-200 mb-6">
                  <h3 className="text-lg sm:text-xl md:text-2xl font-black text-primary tracking-widest">NOTA KASIR</h3>
-                 <p className="text-slate-500 text-xs sm:text-sm mt-1 font-medium">{new Date().toLocaleDateString('id-ID')}</p>
+                 <p className="text-slate-500 text-xs sm:text-sm mt-1 font-medium">{new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
               </div>
 
               <div className="flex-1 space-y-4">

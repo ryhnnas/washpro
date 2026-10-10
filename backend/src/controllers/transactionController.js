@@ -555,7 +555,7 @@ const getReportCharts = async (req, res) => {
     const revenueMap = {};
     transactions.forEach(t => {
       if (t.status === 'CANCELLED') return; // Exclude cancelled from charts revenue
-      const date = new Date(t.startDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+      const date = new Date(t.startDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', timeZone: 'Asia/Jakarta' });
       revenueMap[date] = (revenueMap[date] || 0) + (t.payableAmount || 0);
     });
     const dailyRevenue = Object.entries(revenueMap).map(([date, revenue]) => ({ date, revenue }));
@@ -581,7 +581,12 @@ const getReportCharts = async (req, res) => {
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, 5);
 
-    res.json({ dailyRevenue, statusBreakdown, topServices });
+    const reportable = transactions.filter(t => t.status !== 'CANCELLED');
+    const summary = {
+      totalTransactions: reportable.length,
+      totalRevenue: reportable.reduce((sum, t) => sum + (['CASH', 'QRIS'].includes(t.paymentMethod) ? (t.payableAmount || 0) : 0), 0),
+    };
+    res.json({ summary, dailyRevenue, statusBreakdown, topServices });
   } catch (error) {
     sendError(res, error, 500, 'Gagal memuat data laporan');
   }

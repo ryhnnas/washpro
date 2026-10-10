@@ -30,3 +30,10 @@ test('distinct services consume their own balances', () => {
   const out = calculateCashierPreview([{ service, qty: 12 }, { service: { ...service, id: 's2' }, qty: 2 }], membership, packages);
   assert.equal(out.coveredAmount, 80000); assert.equal(out.payableAmount, 32000);
 });
+test('fractional partial coverage follows backend division before multiplication', () => {
+  const out = calculateCashierPreview([{ service: { ...service, price: 101 }, qty: 0.6 }],
+    { ...membership, balances: [{ serviceId: 's1', remainingQty: 0.15 }] },
+    [{ id: 'p1', items: [{ serviceId: 's1', deductionRate: 0.3 }] }]);
+  assert.equal(out.coveredAmount, 51);
+  assert.equal(out.payableAmount, 10);
+});

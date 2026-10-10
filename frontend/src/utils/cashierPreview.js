@@ -13,7 +13,7 @@ export function calculateCashierPreview(selectedItems, membership, packages = []
     const allowed = membership?.isActive && quotaItem && balance && Number.isFinite(rate) && rate > 0;
     const required = qty * rate;
     const consumedQuota = allowed ? Math.min(required, Math.max(0, Number(balance.remainingQty) || 0)) : 0;
-    const coveredAmount = allowed ? Math.min(lineTotal, Math.round(qty * service.price * consumedQuota / required)) : 0;
+    const coveredAmount = allowed ? Math.min(lineTotal, Math.round(qty * service.price * (consumedQuota / required))) : 0;
     return { serviceId: service.id, serviceName: service.name, unit: service.unit, qty, lineTotal,
       coveredAmount, payableAmount: lineTotal - coveredAmount, consumedQuota };
   });

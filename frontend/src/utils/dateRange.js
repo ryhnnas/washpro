@@ -36,3 +36,10 @@ export function getTrendRange({ startDate, endDate }) {
   const minimum = wibStart(new Date(endDate)) - 6 * DAY_MS;
   return { startDate: new Date(Math.min(Date.parse(startDate), minimum)).toISOString(), endDate };
 }
+
+export function formatWibDate(value) {
+  return new Date(value).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+}
+export function formatWibDateKey(value) {
+  return new Date(new Date(value).getTime() + SHIFT).toISOString().slice(0, 10);
+}

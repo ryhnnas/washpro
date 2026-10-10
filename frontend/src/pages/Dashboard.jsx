@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import {
   DollarSign, FileText, TrendingUp, TrendingDown, Sparkles, AlertCircle, ArrowRight, Clock, Users,
@@ -64,11 +64,10 @@ export default function Dashboard() {
   const [panelErrors, setPanelErrors] = useState({ trend: '', top: '' });
   const [panelLoading, setPanelLoading] = useState({ trend: false, top: false });
   const [accessDenied, setAccessDenied] = useState(false);
-  const requests = useRef({ generation: 0, trend: 0, top: 0 });
+  const requests = useRef({ generation: 0, stats: 0, trend: 0, top: 0 });
   const { user } = useAuth();
   const { settings, refreshSettings } = useApp();
   const canReport = canAccessStaffMenu(user, settings, 'REPORTS');
-  const [reloadKey, setReloadKey] = useState(0);
   const [chartsReady, setChartsReady] = useState(false);
 
   const [dateFilter, setDateFilter] = useState('hari_ini');
@@ -81,7 +80,6 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, []);
 
-  const retry = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +119,7 @@ export default function Dashboard() {
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [dateFilter, customDate, dateValidation, reloadKey, refreshSettings]);
+  }, [dateFilter, customDate, dateValidation, refreshSettings]);
 
   const retryPanel = async (panel) => {
     if (dateValidation) return;
@@ -131,23 +129,24 @@ export default function Dashboard() {
     setPanelLoading(prev => ({ ...prev, [panel]: true }));
     const current = () => generation === requests.current.generation && id === requests.current[panel];
     try {
-      const response = await api.get(panel === 'trend' ? '/dashboard/revenue-trend' : '/dashboard/top-services', {
+      const response = await api.get(panel === 'stats' ? '/dashboard/stats' : panel === 'trend' ? '/dashboard/revenue-trend' : '/dashboard/top-services', {
         params: panel === 'trend' ? { ...getTrendRange(range), tzOffset: BUSINESS_TZ_OFFSET } : range,
       });
       if (!current()) return;
-      if (panel === 'trend') setTrend(response.data.data || []); else setTopServices(response.data.data || []);
+      if (panel === 'stats') { setStats({ ...EMPTY_STATS, ...response.data }); setError(''); }
+      else if (panel === 'trend') setTrend(response.data.data || []); else setTopServices(response.data.data || []);
       setPanelErrors(prev => ({ ...prev, [panel]: '' }));
     } catch (err) {
       if (!current()) return;
       if (err.response?.data?.code === 'STAFF_PERMISSION_DENIED') { setAccessDenied(true); void refreshSettings(); }
+      else if (panel === 'stats') setError(apiMessage(err, 'Gagal memuat statistik dashboard.'));
       else setPanelErrors(prev => ({ ...prev, [panel]: apiMessage(err, panel === 'trend' ? 'Gagal memuat tren pendapatan.' : 'Gagal memuat layanan terlaris.') }));
     } finally { if (current()) setPanelLoading(prev => ({ ...prev, [panel]: false })); }
   };
   if (accessDenied) return <StaffAccessDenied />;
-  if (dateValidation || error) return <div className="space-y-4">
+  if (dateValidation) return <div className="space-y-4">
     <h1 className="text-3xl font-bold text-primary">Dashboard</h1>
     <DateFilter filter={dateFilter} setFilter={setDateFilter} customDate={customDate} setCustomDate={setCustomDate} />
-    {error && !dateValidation && <div role="alert" className="rounded-xl bg-rose-50 p-4 text-rose-800"><p>{error}</p><button type="button" onClick={retry} className="font-bold underline">Coba lagi</button></div>}
   </div>;
 
   if (loading) {
@@ -194,7 +193,8 @@ export default function Dashboard() {
           </p>
           <button
             type="button"
-            onClick={retry}
+            onClick={() => retryPanel('stats')}
+            disabled={panelLoading.stats}
             className="inline-flex items-center gap-2 self-start sm:self-auto px-4 py-2 rounded-xl bg-white border border-rose-200 text-sm font-bold hover:bg-rose-100 transition-colors"
           >
             <RefreshCw size={14} /> Coba lagi
@@ -202,6 +202,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {!error && <>
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6">
         <StatCard
           icon={<DollarSign size={24} />}
@@ -284,6 +285,8 @@ export default function Dashboard() {
         />
       </div>
 
+      </>}
+
       <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-shadow hover:shadow-md">
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <h3 className="text-xl font-black text-primary flex items-center gap-3">
@@ -333,7 +336,8 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className={`grid grid-cols-1 ${error ? '' : 'lg:grid-cols-3'} gap-8`}>
+        {!error && <>
         <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-shadow hover:shadow-md">
           <h3 className="text-xl font-black text-primary mb-6 flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg text-primary"><Wallet size={20} /></div>
@@ -393,6 +397,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+        </>}
         <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm transition-shadow hover:shadow-md">
           <h3 className="text-lg sm:text-xl font-black text-primary mb-4 sm:mb-6 flex items-center gap-3">
             <div className="p-2 bg-tertiary/20 rounded-lg text-tertiary-hover"><Trophy size={20} /></div>
@@ -423,7 +428,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
+      {!error && <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden transition-shadow hover:shadow-md">
         <div className="p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-50">
           <h3 className="text-xl font-black text-primary">Pesanan Masuk (Hari Ini)</h3>
           {canReport && <Link to="/reports" className="text-sm font-bold text-primary hover:text-tertiary transition-colors flex items-center gap-1">
@@ -489,7 +494,7 @@ export default function Dashboard() {
             </Link>}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
