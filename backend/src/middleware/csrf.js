@@ -67,6 +67,9 @@ const validateCsrf = (req, res, next) => {
     '/api/auth/logout',
     '/api/auth/csrf-token',
     '/api/superadmin/login',
+    '/api/superadmin/forgot-password',
+    '/api/superadmin/verify-otp',
+    '/api/superadmin/reset-password',
     '/api/superadmin/logout',
   ];
   if (publicPaths.some(p => req.path === p || req.originalUrl === p)) {

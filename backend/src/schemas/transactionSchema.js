@@ -1,7 +1,7 @@
 const { z } = require('zod');
 
 const createTransactionSchema = z.object({
-  customerName: z.string().min(1, "Nama pelanggan wajib diisi"),
+  customerName: z.string().trim().min(1, "Nama pelanggan wajib diisi"),
   customerPhone: z.string().nullable().optional(),
   customerAddress: z.string().nullable().optional(),
   serviceName: z.string().optional(),

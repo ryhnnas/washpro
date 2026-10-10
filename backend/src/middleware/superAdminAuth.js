@@ -1,10 +1,11 @@
 const jwt = require('jsonwebtoken');
+const prisma = require('../config/prisma');
 
 /**
  * Middleware: Validasi token JWT khusus SuperAdmin.
  * Prioritas: httpOnly cookie, fallback Authorization header (API client).
  */
-const requireSuperAdmin = (req, res, next) => {
+const requireSuperAdmin = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const headerToken = authHeader && authHeader.split(' ')[1];
   const cookieToken = req.cookies?.superadmin_token;
@@ -21,6 +22,13 @@ const requireSuperAdmin = (req, res, next) => {
     const verified = jwt.verify(token, secret);
     if (verified.role !== 'SUPERADMIN') {
       return res.status(403).json({ message: 'Akses ditolak, bukan SuperAdmin' });
+    }
+    const admin = await prisma.superAdmin.findUnique({
+      where: { id: verified.id }, select: { id: true, sessionVersion: true },
+    });
+    if (!admin || admin.sessionVersion !== (verified.sessionVersion ?? 0)) {
+      if (cookieToken) res.clearCookie('superadmin_token', { path: '/' });
+      return res.status(401).json({ message: 'Sesi telah berakhir. Silakan login ulang.', code: 'SESSION_REVOKED' });
     }
     req.superAdmin = verified;
     next();

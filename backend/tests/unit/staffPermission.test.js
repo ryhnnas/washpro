@@ -44,4 +44,11 @@ describe('Staff Permission Middleware', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'STAFF_PERMISSION_DENIED' }));
   });
+
+  it.each([false, true])('dashboard respects its own permission flag (%s)', async (allowed) => {
+    prisma.businessSetting.findUnique.mockResolvedValue({ allowStaffDashboard: allowed, allowStaffReports: !allowed });
+    await requireStaffPermission('DASHBOARD', { write: false })(req, res, next);
+    if (allowed) expect(next).toHaveBeenCalled();
+    else { expect(res.status).toHaveBeenCalledWith(403); expect(next).not.toHaveBeenCalled(); }
+  });
 });

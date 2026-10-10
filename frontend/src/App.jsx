@@ -4,7 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import PageSkeleton from './components/PageSkeleton';
+import RouteSeo from './components/RouteSeo';
 import MainLayout from './layouts/MainLayout';
+import StaffMenuGate from './components/StaffMenuGate';
 import superAdminApi from './lib/superAdminAxios';
 import { Toaster } from 'react-hot-toast';
 
@@ -70,6 +72,7 @@ function App() {
       <AppProvider>
         <ErrorBoundary>
           <Router>
+            <RouteSeo />
             <Toaster position="top-center" reverseOrder={false} />
             <Suspense fallback={<PageSkeleton />}>
               <Routes>
@@ -79,6 +82,8 @@ function App() {
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/superadmin/forgot-password" element={<ForgotPassword superAdmin />} />
+                <Route path="/superadmin/reset-password" element={<ResetPassword superAdmin />} />
 
                 <Route path="/superadmin/login" element={<SuperAdminLogin />} />
                 <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />
@@ -88,11 +93,11 @@ function App() {
                 <Route path="/staff-onboarding" element={<AuthOnlyRoute><StaffOnboarding /></AuthOnlyRoute>} />
 
                 <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/dashboard" element={<StaffMenuGate menu="DASHBOARD"><Dashboard /></StaffMenuGate>} />
                   <Route path="/cashier" element={<Cashier />} />
                   <Route path="/customers" element={<Customers />} />
                   <Route path="/tracking" element={<Tracking />} />
-                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/reports" element={<StaffMenuGate menu="REPORTS"><Reports /></StaffMenuGate>} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/staff" element={<Staff />} />

@@ -1,9 +1,10 @@
-const { updateStatus } = require('../../src/controllers/transactionController');
+const { updateStatus, getReportCharts } = require('../../src/controllers/transactionController');
 const prisma = require('../../src/config/prisma');
 const whatsappService = require('../../src/services/whatsappService');
 
 jest.mock('../../src/config/prisma', () => ({
   transaction: {
+    findMany: jest.fn(),
     findFirst: jest.fn(),
     update: jest.fn(),
   },
@@ -61,5 +62,21 @@ describe('Transaction Controller - Unit Tests', () => {
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith({ error: 'Transaksi tidak ditemukan' });
     });
+  });
+  it('groups report days in WIB and provides paid summary without dashboard access', async () => {
+    prisma.transaction.findMany.mockResolvedValue([
+      { startDate: '2026-10-10T17:15:00Z', status: 'PENDING', paymentMethod: 'CASH', payableAmount: 10000 },
+      { startDate: '2026-10-11T05:00:00Z', status: 'PENDING', paymentMethod: 'BAYAR_NANTI', payableAmount: 5000 },
+      { startDate: '2026-10-11T05:00:00Z', status: 'CANCELLED', paymentMethod: 'CASH', payableAmount: 9000 },
+    ]);
+    req.query = { startDate: '2026-10-10T17:00:00Z', endDate: '2026-10-11T16:59:59.999Z' };
+    await getReportCharts(req, res);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      summary: { totalTransactions: 2, totalRevenue: 10000 },
+      dailyRevenue: [{ date: '11 Okt', revenue: 15000 }],
+    }));
+    expect(prisma.transaction.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
+      businessId: 'biz-1', startDate: { gte: new Date(req.query.startDate), lte: new Date(req.query.endDate) },
+    } }));
   });
 });

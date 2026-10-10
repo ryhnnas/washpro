@@ -47,6 +47,7 @@ export function useSettings() {
           setSettings((prev) => ({
             ...prev,
             ...res.data,
+            requireCustomerName: true,
             staffAllowedMenus: staffMenus,
             whatsappTemplates: mergedTemplates,
             membershipPackages: res.data.membershipPackages || [],
@@ -76,6 +77,7 @@ export function useSettings() {
     try {
       const payload = {
         ...settings,
+        requireCustomerName: true,
         membershipPackages: settings.membershipPackages.map((pkg) => ({
           ...pkg,
           items: pkg.items.map((i) => ({

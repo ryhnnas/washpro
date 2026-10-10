@@ -103,46 +103,35 @@ const calculateCoverage = ({ transactionQty, servicePrice, activeMembership, ser
   };
 };
 
-const consumeQuotaAndLog = async ({
-  tx,
-  businessId,
-  membershipId,
-  transactionId,
-  serviceId,
-  usedQty,
-  coveredAmount,
-  payableAmount,
-}) => {
-  if (!membershipId || usedQty <= 0) return;
-
-  const updated = await tx.customerMembershipQuotaBalance.updateMany({
-    where: {
-      customerMembershipId: membershipId,
-      serviceId,
-      remainingQty: { gte: usedQty },
-    },
-    data: { remainingQty: { decrement: usedQty } },
-  });
-
-  if (updated.count === 0) {
-    throw new DomainError(
-      409,
-      'MEMBERSHIP_QUOTA_CHANGED',
-      'Kuota membership berubah karena transaksi paralel. Muat ulang data pelanggan dan coba lagi.'
-    );
+const consumeQuotaAndLog = async ({ tx, businessId, membershipId, transactionId, items }) => {
+  if (!membershipId) return;
+  const covered = items.filter((item) => item.isUsingMembership && item.usedQty > 0);
+  const groups = new Map();
+  for (const item of covered) {
+    if (!groups.has(item.usedQty)) groups.set(item.usedQty, []);
+    groups.get(item.usedQty).push(item.serviceId);
   }
 
-  await tx.customerMembershipUsageLog.create({
-    data: {
-      businessId,
-      customerMembershipId: membershipId,
-      transactionId,
-      serviceId,
-      usedQty,
-      coveredAmount,
-      payableAmount,
-    },
-  });
+  for (const [usedQty, serviceIds] of groups) {
+    const updated = await tx.customerMembershipQuotaBalance.updateMany({
+      where: { customerMembershipId: membershipId, serviceId: { in: serviceIds }, remainingQty: { gte: usedQty } },
+      data: { remainingQty: { decrement: usedQty } },
+    });
+    if (updated.count !== serviceIds.length) {
+      throw new DomainError(409, 'MEMBERSHIP_QUOTA_CHANGED',
+        'Kuota membership berubah karena transaksi paralel. Muat ulang data pelanggan dan coba lagi.');
+    }
+  }
+
+  if (covered.length) {
+    await tx.customerMembershipUsageLog.createMany({
+      data: covered.map((item) => ({
+        businessId, customerMembershipId: membershipId, transactionId,
+        serviceId: item.serviceId, usedQty: item.usedQty,
+        coveredAmount: item.coveredAmount, payableAmount: item.payableAmount,
+      })),
+    });
+  }
 };
 
 const activateCustomerMembership = async ({
@@ -199,18 +188,27 @@ const restoreQuotaAndCleanupLogs = async (tx, transactionId) => {
     where: { transactionId },
   });
 
+  const balances = new Map();
   for (const log of usageLogs) {
-    await tx.customerMembershipQuotaBalance.update({
-      where: {
-        customerMembershipId_serviceId: {
-          customerMembershipId: log.customerMembershipId,
-          serviceId: log.serviceId,
-        },
-      },
-      data: {
-        remainingQty: { increment: log.usedQty },
-      },
+    const key = JSON.stringify([log.customerMembershipId, log.serviceId]);
+    const balance = balances.get(key) || {
+      customerMembershipId: log.customerMembershipId, serviceId: log.serviceId, usedQty: 0,
+    };
+    balance.usedQty += log.usedQty;
+    balances.set(key, balance);
+  }
+  const groups = new Map();
+  for (const { usedQty, ...where } of balances.values()) {
+    if (!groups.has(usedQty)) groups.set(usedQty, []);
+    groups.get(usedQty).push(where);
+  }
+  for (const [usedQty, filters] of groups) {
+    const updated = await tx.customerMembershipQuotaBalance.updateMany({
+      where: { OR: filters }, data: { remainingQty: { increment: usedQty } },
     });
+    if (updated.count !== filters.length) {
+      throw new DomainError(409, 'MEMBERSHIP_QUOTA_CHANGED', 'Saldo membership tidak ditemukan. Muat ulang data pelanggan dan coba lagi.');
+    }
   }
 
   await tx.customerMembershipUsageLog.deleteMany({

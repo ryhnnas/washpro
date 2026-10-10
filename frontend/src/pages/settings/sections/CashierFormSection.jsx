@@ -13,7 +13,7 @@ export default function CashierFormSection({ settings, setSettings }) {
         </div>
       </div>
       <div className="space-y-4 relative z-10">
-        <ToggleOption id="toggle-customer-name" label="Nama Pelanggan" desc="Wajibkan kasir memasukkan nama" checked={settings.requireCustomerName} onChange={(val) => setSettings({ ...settings, requireCustomerName: val })} />
+        <p className="text-sm font-bold text-slate-600">Nama pelanggan selalu wajib diisi.</p>
         <ToggleOption id="toggle-customer-phone" label="Nomor WhatsApp" desc="Penting untuk pengiriman nota digital" checked={settings.requireCustomerPhone} onChange={(val) => setSettings({ ...settings, requireCustomerPhone: val })} />
         <ToggleOption id="toggle-customer-address" label="Alamat Pengiriman" desc="Munculkan textarea domisili/alamat" checked={settings.requireCustomerAddress} onChange={(val) => setSettings({ ...settings, requireCustomerAddress: val })} />
       </div>

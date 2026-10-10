@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const whatsappService = require('../services/whatsappService');
 const membershipService = require('../services/membershipService');
+const { resolveTransactionServices } = require('../services/transactionService');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 const { sendError, handleControllerError } = require('../utils/errorResponse');
 const { DomainError } = require('../utils/domainError');
@@ -137,17 +138,7 @@ const createTransaction = async (req, res) => {
         throw new DomainError(400, 'INVALID_TRANSACTION_ITEMS', 'Minimal satu rincian layanan wajib diisi');
       }
 
-      const selectedServices = await Promise.all(
-        normalizedItems.map(async (item) => {
-          let svc = null;
-          if (item.serviceId) svc = await tx.service.findFirst({ where: { id: item.serviceId, businessId } });
-          if (!svc && item.serviceName) svc = await tx.service.findFirst({ where: { name: item.serviceName, businessId } });
-          if (!svc) {
-            throw new DomainError(404, 'SERVICE_NOT_FOUND', `Layanan tidak ditemukan: ${item.serviceName || item.serviceId}`);
-          }
-          return { service: svc, qty: item.qty };
-        })
-      );
+      const selectedServices = await resolveTransactionServices(tx, businessId, normalizedItems);
       const mergedByService = new Map();
       selectedServices.forEach(({ service, qty }) => {
         const key = service.id;
@@ -229,19 +220,10 @@ const createTransaction = async (req, res) => {
       });
 
       if (activeMembership?.id) {
-        for (const item of itemBreakdowns) {
-          if (!item.isUsingMembership || item.usedQty <= 0) continue;
-          await membershipService.consumeQuotaAndLog({
-            tx,
-            businessId,
-            membershipId: activeMembership.id,
-            transactionId: created.id,
-            serviceId: item.serviceId,
-            usedQty: item.usedQty,
-            coveredAmount: item.coveredAmount,
-            payableAmount: item.payableAmount,
-          });
-        }
+        await membershipService.consumeQuotaAndLog({
+          tx, businessId, membershipId: activeMembership.id,
+          transactionId: created.id, items: itemBreakdowns,
+        });
       }
 
       return {
@@ -573,7 +555,7 @@ const getReportCharts = async (req, res) => {
     const revenueMap = {};
     transactions.forEach(t => {
       if (t.status === 'CANCELLED') return; // Exclude cancelled from charts revenue
-      const date = new Date(t.startDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+      const date = new Date(t.startDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', timeZone: 'Asia/Jakarta' });
       revenueMap[date] = (revenueMap[date] || 0) + (t.payableAmount || 0);
     });
     const dailyRevenue = Object.entries(revenueMap).map(([date, revenue]) => ({ date, revenue }));
@@ -599,7 +581,12 @@ const getReportCharts = async (req, res) => {
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, 5);
 
-    res.json({ dailyRevenue, statusBreakdown, topServices });
+    const reportable = transactions.filter(t => t.status !== 'CANCELLED');
+    const summary = {
+      totalTransactions: reportable.length,
+      totalRevenue: reportable.reduce((sum, t) => sum + (['CASH', 'QRIS'].includes(t.paymentMethod) ? (t.payableAmount || 0) : 0), 0),
+    };
+    res.json({ summary, dailyRevenue, statusBreakdown, topServices });
   } catch (error) {
     sendError(res, error, 500, 'Gagal memuat data laporan');
   }

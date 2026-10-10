@@ -6,6 +6,21 @@ const emailService = require('../services/emailService');
 const { invalidateSubscriptionCache } = require('../middleware/checkSubscription');
 const { sendError } = require('../utils/errorResponse');
 const { generateCsrfToken, setCsrfCookie } = require('../middleware/csrf');
+const { resolveReactivationStatus } = require('../services/businessLifecycleService');
+const { buildPlatformStats } = require('../services/superAdminStatsService');
+
+const REACTIVATION_LABEL = { ACTIVE: 'Aktif', TRIAL: 'Trial', EXPIRED: 'Kadaluarsa' };
+
+const BUSINESS_STATUSES = ['TRIAL', 'ACTIVE', 'PENDING_PAYMENT', 'EXPIRED', 'SUSPENDED'];
+const PAYMENT_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+
+const parsePagination = (query) => {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+const withTotalPages = (total, limit) => Math.max(1, Math.ceil(total / limit));
 
 // ==================== LOGIN ====================
 const login = async (req, res) => {
@@ -23,7 +38,7 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: admin.id, role: 'SUPERADMIN' },
+      { id: admin.id, role: 'SUPERADMIN', sessionVersion: admin.sessionVersion ?? 0 },
       secret,
       { expiresIn: '8h' }
     );
@@ -52,30 +67,7 @@ const login = async (req, res) => {
 // ==================== DASHBOARD STATS ====================
 const getDashboardStats = async (req, res) => {
   try {
-    const [totalBusinesses, activeBusinesses, trialBusinesses, pendingPayments] = await Promise.all([
-      prisma.business.count(),
-      prisma.business.count({ where: { subscriptionStatus: 'ACTIVE' } }),
-      prisma.business.count({ where: { subscriptionStatus: 'TRIAL' } }),
-      prisma.subscriptionPayment.count({ where: { status: 'PENDING' } }),
-    ]);
-
-    // Hitung pendapatan bulan ini dari pembayaran APPROVED
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const monthlyRevenue = await prisma.subscriptionPayment.aggregate({
-      where: { status: 'APPROVED', approvedAt: { gte: startOfMonth } },
-      _sum: { amount: true },
-    });
-
-    res.json({
-      totalBusinesses,
-      activeBusinesses,
-      trialBusinesses,
-      pendingPayments,
-      monthlyRevenue: monthlyRevenue._sum.amount || 0,
-    });
+    res.json(await buildPlatformStats(prisma));
   } catch (err) {
     sendError(res, err, 500);
   }
@@ -84,18 +76,21 @@ const getDashboardStats = async (req, res) => {
 // ==================== KELOLA TOKO (BUSINESSES) ====================
 const getBusinesses = async (req, res) => {
   try {
-    const { status, search, page = 1, limit = 20 } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { status, search } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
+    if (status && !BUSINESS_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Status toko tidak valid' });
+    }
 
     const where = { deletedAt: null };
     if (status) where.subscriptionStatus = status;
-    if (search) where.name = { contains: search };
+    if (search && String(search).trim()) where.name = { contains: String(search).trim() };
 
     const [businesses, total] = await Promise.all([
       prisma.business.findMany({
         where,
         skip,
-        take: Number(limit),
+        take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
           users: { where: { role: 'OWNER' }, select: { name: true, email: true } },
@@ -105,7 +100,7 @@ const getBusinesses = async (req, res) => {
       prisma.business.count({ where }),
     ]);
 
-    res.json({ businesses, total, page: Number(page), limit: Number(limit) });
+    res.json({ businesses, total, page, limit, totalPages: withTotalPages(total, limit) });
   } catch (err) {
     sendError(res, err, 500);
   }
@@ -119,7 +114,14 @@ const toggleBusiness = async (req, res) => {
     const business = await prisma.business.findUnique({ where: { id: businessId } });
     if (!business) return res.status(404).json({ message: 'Bisnis tidak ditemukan' });
 
-    const newStatus = action === 'SUSPEND' ? 'SUSPENDED' : 'ACTIVE';
+    let newStatus = 'SUSPENDED';
+    if (action !== 'SUSPEND') {
+      const outcome = resolveReactivationStatus(business);
+      if (!outcome.ok) {
+        return res.status(400).json({ message: 'Toko sudah dihapus dan tidak dapat diaktifkan kembali.' });
+      }
+      newStatus = outcome.status;
+    }
     const updated = await prisma.business.update({
       where: { id: businessId },
       data: { subscriptionStatus: newStatus },
@@ -158,7 +160,10 @@ const toggleBusiness = async (req, res) => {
       }
     }
 
-    res.json({ message: `Toko berhasil ${action === 'SUSPEND' ? 'ditangguhkan' : 'diaktifkan'}`, business: updated });
+    const message = action === 'SUSPEND'
+      ? 'Toko berhasil ditangguhkan'
+      : `Toko diaktifkan kembali dengan status ${REACTIVATION_LABEL[newStatus]}`;
+    res.json({ message, business: updated });
   } catch (err) {
     sendError(res, err, 500);
   }
@@ -192,6 +197,8 @@ const deleteBusiness = async (req, res) => {
       },
     });
 
+    invalidateSubscriptionCache(businessId);
+
     res.json({
       message: `Toko "${business.name}" telah dinonaktifkan. Data masih tersimpan dan dapat dipulihkan oleh tim teknis jika diperlukan.`,
     });
@@ -203,17 +210,21 @@ const deleteBusiness = async (req, res) => {
 // ==================== KELOLA PEMBAYARAN ====================
 const getPayments = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { status, search } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
+    if (status && !PAYMENT_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Status pembayaran tidak valid' });
+    }
 
     const where = {};
     if (status) where.status = status;
+    if (search && String(search).trim()) where.business = { name: { contains: String(search).trim() } };
 
     const [payments, total] = await Promise.all([
       prisma.subscriptionPayment.findMany({
         where,
         skip,
-        take: Number(limit),
+        take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
           business: { select: { name: true, phone: true } },
@@ -224,7 +235,7 @@ const getPayments = async (req, res) => {
       prisma.subscriptionPayment.count({ where }),
     ]);
 
-    res.json({ payments, total, page: Number(page), limit: Number(limit) });
+    res.json({ payments, total, page, limit, totalPages: withTotalPages(total, limit) });
   } catch (err) {
     sendError(res, err, 500);
   }
@@ -307,7 +318,8 @@ const rejectPayment = async (req, res) => {
       where: { id: paymentId },
       data: {
         status: 'REJECTED',
-        approvedById: superAdminId,
+        rejectedById: superAdminId,
+        rejectedAt: new Date(),
         rejectionReason: reason || 'Bukti pembayaran tidak valid.',
       },
     });

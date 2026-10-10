@@ -57,6 +57,8 @@ jobs:
       - name: Run unit & integration tests
         working-directory: backend
         run: npm test
+        env:
+          WASHPRO_QUERY_DB_TESTS: '1'
 
   migration-upgrade:
     name: Backend — migration upgrade check
@@ -112,6 +114,9 @@ jobs:
         env:
           VITE_API_URL: http://localhost:5000/api
 
+      - name: Frontend helper and SEO tests
+        run: npm run test:unit --workspace=frontend
+
   e2e:
     name: E2E — Playwright Chromium
     runs-on: ubuntu-latest
@@ -162,3 +167,6 @@ jobs:
           PORT: '5001'
           VITE_API_URL: http://localhost:5001/api
         run: npx playwright test
+
+      - name: Staff cashier and dashboard mocked regressions
+        run: npx playwright test --config=playwright.mock.config.js

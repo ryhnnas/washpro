@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { authService } from '../services/authService';
+import { getPasswordRecoveryService } from '../services/passwordRecoveryService';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Mail, KeyRound, ArrowRight, ArrowLeft, CheckCircle2, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PasswordInput, { getPasswordPolicyErrors } from '../components/PasswordInput';
 
-export default function ResetPassword() {
+export default function ResetPassword({ superAdmin = false }) {
+  const recoveryService = getPasswordRecoveryService(superAdmin);
+  const loginPath = superAdmin ? '/superadmin/login' : '/login';
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState(searchParams.get('email') || '');
   const [otp, setOtp] = useState('');
@@ -35,11 +37,11 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
-      const { resetToken } = await authService.verifyOtp(email, otp);
-      const data = await authService.resetPassword(resetToken, password);
+      const { resetToken } = await recoveryService.verifyOtp(email.trim(), otp);
+      const data = await recoveryService.resetPassword(resetToken, password);
       toast.success(data.message || 'Kata sandi berhasil diperbarui!');
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 3000);
+      setTimeout(() => navigate(loginPath), 3000);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Gagal memperbarui kata sandi');
     } finally {
@@ -48,24 +50,26 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center bg-secondary overflow-hidden p-4">
+    <div className={`min-h-screen relative flex items-center justify-center overflow-hidden p-4 ${superAdmin ? 'bg-slate-950' : 'bg-secondary'}`}>
       <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-tertiary/20 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className="w-full max-w-[420px] bg-white border border-slate-200 shadow-2xl p-8 md:p-10 rounded-3xl z-10 relative">
+      <div className={`w-full max-w-[420px] border shadow-2xl p-8 md:p-10 rounded-3xl z-10 relative ${superAdmin ? 'bg-slate-900 border-slate-700 text-slate-100 [&_input]:bg-slate-800 [&_input]:text-white [&_input]:border-slate-600 [&_label]:text-slate-300' : 'bg-white border-slate-200'}`}>
         <div className="mb-8 text-center flex flex-col items-center">
           <img src="/logo.png" alt="WashPro Logo" className="w-20 h-auto object-contain mb-4" />
-          <h2 className="text-3xl font-black text-primary mb-2 tracking-tight">Atur Sandi Baru</h2>
-          <p className="text-slate-500 font-medium text-sm">Masukkan OTP email dan kata sandi baru Anda</p>
+          <h2 className={`text-3xl font-black mb-2 tracking-tight ${superAdmin ? 'text-slate-100' : 'text-primary'}`}>Atur Sandi{superAdmin ? ' Superadmin' : ' Baru'}</h2>
+          <p className={`${superAdmin ? 'text-slate-300' : 'text-slate-500'} font-medium text-sm`}>Masukkan OTP email dan kata sandi baru Anda</p>
         </div>
 
         {!success ? (
           <form onSubmit={handleResetPassword} className="space-y-5">
             <div>
-              <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
+              <label htmlFor="reset-email" className="block text-sm font-bold text-slate-500 mb-2 ml-1">Email Terdaftar</label>
               <div className="relative group">
                 <input
+                  id="reset-email"
                   type="email"
+                  autoComplete="email"
                   placeholder="nama@email.com"
                   className="premium-input bg-slate-50 premium-input-icon"
                   value={email}
@@ -77,10 +81,12 @@ export default function ResetPassword() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Kode OTP</label>
+              <label htmlFor="reset-otp" className="block text-sm font-bold text-slate-500 mb-2 ml-1">Kode OTP</label>
               <div className="relative group">
                 <input
+                  id="reset-otp"
                   type="text"
+                  autoComplete="one-time-code"
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="123456"
@@ -98,10 +104,12 @@ export default function ResetPassword() {
             </div>
 
             <div>
-              <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Konfirmasi Kata Sandi</label>
+              <label htmlFor="reset-confirm-password" className="block text-sm font-bold text-slate-500 mb-2 ml-1">Konfirmasi Kata Sandi</label>
               <div className="relative group">
                 <input
+                  id="reset-confirm-password"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Ulangi kata sandi"
                   className="premium-input bg-slate-50 premium-input-icon"
                   value={confirmPassword}
@@ -138,7 +146,7 @@ export default function ResetPassword() {
         )}
 
         <div className="mt-8 pt-6 border-t border-slate-200 text-center">
-          <Link to="/login" className="text-slate-400 hover:text-slate-600 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+          <Link to={loginPath} className="text-slate-400 hover:text-slate-500 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
             <ArrowLeft size={16} /> Kembali ke Halaman Login
           </Link>
         </div>

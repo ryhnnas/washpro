@@ -50,8 +50,9 @@ const resolveQrForDisplay = async (qr, businessId) => {
   return `data:${contentType};base64,${buffer.toString('base64')}`;
 };
 
-const ensureBusinessForWhatsApp = async (businessId) => {
+const ensureBusinessForWhatsApp = async (businessId, knownBusiness = null) => {
   if (!businessId) return null;
+  if (knownBusiness?.id === businessId) return knownBusiness;
 
   const existing = await prisma.business.findUnique({ where: { id: businessId } }).catch(() => null);
   if (existing) return existing;
@@ -75,9 +76,9 @@ const ensureBusinessForWhatsApp = async (businessId) => {
 };
 
 // 1. Session Management
-const checkConnectionStatus = async (businessId) => {
+const checkConnectionStatus = async (businessId, knownBusiness = null) => {
   try {
-    const business = await ensureBusinessForWhatsApp(businessId);
+    const business = await ensureBusinessForWhatsApp(businessId, knownBusiness);
     if (!business) throw new Error('Bisnis tidak ditemukan');
 
     const res = await fetch(`${getGatewayUrl()}/devices/${businessId}/status`, {
@@ -101,7 +102,7 @@ const checkConnectionStatus = async (businessId) => {
 
     return { status: isConnected ? 'connected' : 'disconnected', detail: data.results || data.data };
   } catch (err) {
-    const business = await ensureBusinessForWhatsApp(businessId);
+    const business = await ensureBusinessForWhatsApp(businessId, knownBusiness);
     if (business) {
       await prisma.whatsAppSession.upsert({
         where: { businessId },
@@ -283,7 +284,7 @@ const logoutDevice = async (businessId) => {
 };
 
 // 2. Messaging
-const sendMessage = async ({ businessId, phone, message, skipQueue = false }) => {
+const sendMessage = async ({ businessId, phone, message, skipQueue = false, session: batchSession }) => {
   const target = normalizePhone(phone);
   if (!target) return { ok: false, skipped: true, reason: 'NO_PHONE' };
 
@@ -294,7 +295,10 @@ const sendMessage = async ({ businessId, phone, message, skipQueue = false }) =>
   // SUPERADMIN tidak punya FK ke Business table — skip queue, langsung kirim atau skip
   const isSuperAdmin = businessId === 'SUPERADMIN';
 
-  const session = await prisma.whatsAppSession.findUnique({ where: { businessId } }).catch(() => null);
+  // Only the internal queue worker supplies a snapshot. Endpoint sends still
+  // read a fresh session, and the gateway remains authoritative during send.
+  const session = batchSession?.businessId === businessId
+    ? batchSession : await prisma.whatsAppSession.findUnique({ where: { businessId } }).catch(() => null);
   
   // Jika tidak terkoneksi dan bukan dari worker queue, masukkan ke queue
   // (SUPERADMIN tidak masuk queue karena tidak ada FK target di Business)
@@ -323,6 +327,7 @@ const sendMessage = async ({ businessId, phone, message, skipQueue = false }) =>
     if (!res.ok) {
       if (res.status === 401 || data.message?.toLowerCase().includes('not connected')) {
         await updateSession(businessId, { status: 'disconnected', lastError: 'Session dropped during send' });
+        if (batchSession?.businessId === businessId) batchSession.status = 'disconnected';
       }
 
       // Jika gagal sistem (5xx atau timeout), masukkan ke queue jika belum di queue
@@ -455,13 +460,14 @@ const startHealthCheck = () => {
     try {
       const activeSessions = await prisma.whatsAppSession.findMany({
         where: { status: { in: ['connected', 'connecting'] } },
+        include: { business: { select: { id: true } } },
         take: 10,
       });
       console.log(`[WhatsApp Health Check] Checking ${activeSessions.length} session(s)...`);
       for (const session of activeSessions) {
         // Random jitter 0-30s between each check to spread load
         await new Promise(r => setTimeout(r, Math.random() * 30000));
-        await checkConnectionStatus(session.businessId);
+        await checkConnectionStatus(session.businessId, session.business);
       }
     } catch (err) {
       console.error('WhatsApp Health Check Error:', err.message);

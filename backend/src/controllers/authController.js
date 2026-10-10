@@ -281,12 +281,13 @@ const login = async (req, res) => {
 // GET SESSION — validasi cookie auth, return profil user
 const getSession = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
+    const user = req.currentUser?.id === req.user.id ? req.currentUser : await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { id: true, name: true, email: true, role: true, businessId: true, phone: true, isEmailVerified: true, mustChangePassword: true },
     });
     if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
-    res.json({ user });
+    const { id, name, email, role, businessId, phone, isEmailVerified, mustChangePassword } = user;
+    res.json({ user: { id, name, email, role, businessId, phone, isEmailVerified, mustChangePassword } });
   } catch (error) {
     sendError(res, error, 500);
   }
@@ -371,159 +372,8 @@ const changePassword = async (req, res) => {
   }
 };
 
-// FORGOT PASSWORD — Generate & Send OTP via WhatsApp SuperAdmin
-const forgotPassword = async (req, res) => {
-  const { email } = req.body;
-
-  try {
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    // Anti-enumeration: selalu return response yang sama
-    if (!user) {
-      return res.json({ message: "Jika email terdaftar, kode OTP akan dikirim ke email Anda." });
-    }
-
-    // Hapus OTP lama yang belum expired untuk user ini
-    await prisma.passwordResetOtp.deleteMany({
-      where: { userId: user.id, usedAt: null },
-    });
-
-    // Generate OTP 6 digit
-    const otpPlain = crypto.randomInt(100000, 999999).toString();
-    const otpHashed = await bcrypt.hash(otpPlain, 10);
-
-    // Simpan OTP (expires 5 menit)
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await prisma.passwordResetOtp.create({
-      data: {
-        userId: user.id,
-        otp: otpHashed,
-        expiresAt,
-      },
-    });
-
-    await emailService.sendEmail({
-      to: user.email,
-      subject: 'WashPro - Kode Reset Password',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-          <h2 style="color: #4f46e5; text-align: center;">WashPro - Kode Reset Password</h2>
-          <p>Halo <strong>${user.name}</strong>,</p>
-          <p>Gunakan kode OTP berikut untuk mengatur ulang kata sandi akun WashPro Anda:</p>
-          <div style="text-align: center; margin: 28px 0;">
-            <span style="display: inline-block; font-size: 32px; letter-spacing: 8px; font-weight: 700; color: #0f172a; background: #f8fafc; padding: 16px 24px; border-radius: 10px;">${otpPlain}</span>
-          </div>
-          <p>Kode ini berlaku selama <strong>5 menit</strong>. Jangan bagikan kode ini kepada siapa pun.</p>
-          <p>Jika Anda tidak meminta reset password, abaikan email ini.</p>
-        </div>
-      `,
-    });
-
-    res.json({ message: "Jika email terdaftar, kode OTP akan dikirim ke email Anda." });
-  } catch (error) {
-    sendError(res, error, 500);
-  }
-};
-
-// VERIFY OTP — Return short-lived reset token
-const verifyOtp = async (req, res) => {
-  const { email, otp } = req.body;
-
-  try {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(400).json({ message: "Kode OTP tidak valid atau sudah kedaluwarsa." });
-
-    // Cari OTP terbaru yang belum expired, belum dipakai, dan attempts < 5
-    const otpRecord = await prisma.passwordResetOtp.findFirst({
-      where: {
-        userId: user.id,
-        usedAt: null,
-        attempts: { lt: 5 },
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!otpRecord) {
-      return res.status(400).json({ message: "Kode OTP tidak valid atau sudah kedaluwarsa." });
-    }
-
-    // Verifikasi OTP
-    const isValid = await bcrypt.compare(otp, otpRecord.otp);
-    if (!isValid) {
-      // Increment attempts
-      await prisma.passwordResetOtp.update({
-        where: { id: otpRecord.id },
-        data: { attempts: otpRecord.attempts + 1 },
-      });
-
-      const remaining = 4 - otpRecord.attempts;
-      return res.status(400).json({
-        message: `Kode OTP salah. ${remaining > 0 ? `Sisa percobaan: ${remaining}` : 'OTP telah hangus, silakan minta ulang.'}`,
-      });
-    }
-
-    // OTP valid — generate short-lived reset token (10 menit)
-    const resetToken = jwt.sign(
-      { userId: user.id, purpose: 'password-reset', otpId: otpRecord.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '10m' }
-    );
-
-    res.json({ message: "OTP valid. Silakan set password baru.", resetToken });
-  } catch (error) {
-    sendError(res, error, 500);
-  }
-};
-
-// RESET PASSWORD — Using reset token from verifyOtp
-const resetPassword = async (req, res) => {
-  const { resetToken, newPassword } = req.body;
-
-  try {
-    // Verify token
-    let payload;
-    try {
-      payload = jwt.verify(resetToken, process.env.JWT_SECRET);
-    } catch (err) {
-      return res.status(400).json({ message: "Token tidak valid atau sudah kedaluwarsa. Silakan ulangi proses reset." });
-    }
-
-    if (payload.purpose !== 'password-reset') {
-      return res.status(400).json({ message: "Token tidak valid." });
-    }
-
-    // Cek apakah OTP sudah dipakai (prevent reuse)
-    const otpRecord = await prisma.passwordResetOtp.findUnique({
-      where: { id: payload.otpId },
-    });
-
-    if (!otpRecord || otpRecord.usedAt) {
-      return res.status(400).json({ message: "Token sudah digunakan. Silakan minta OTP baru." });
-    }
-
-    // Update password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: payload.userId },
-        data: { password: hashedPassword },
-      });
-      await revokeAllUserSessions(tx, payload.userId);
-      await tx.passwordResetOtp.update({
-        where: { id: payload.otpId },
-        data: { usedAt: new Date() },
-      });
-      await tx.passwordResetOtp.deleteMany({
-        where: { userId: payload.userId, id: { not: payload.otpId } },
-      });
-    });
-
-    res.json({ message: 'Password berhasil direset. Silakan login dengan password baru.' });
-  } catch (error) {
-    sendError(res, error, 500);
-  }
-};
+// Password recovery via email OTP, with atomic token consumption.
+const { forgotPassword, verifyOtp, resetPassword } = require('./passwordResetController').userPasswordReset;
 
 // REFRESH TOKEN — Generate new access token using refresh token
 const refreshAccessToken = async (req, res) => {

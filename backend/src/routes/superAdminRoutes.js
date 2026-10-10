@@ -3,6 +3,8 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const requireSuperAdmin = require('../middleware/superAdminAuth');
 const validate = require('../middleware/validator');
+const { forgotPassword, verifyOtp, resetPassword } = require('../controllers/passwordResetController').superAdminPasswordReset;
+const { forgotPasswordSchema, verifyOtpSchema, resetPasswordSchema } = require('../schemas/authSchema');
 const {
   loginSchema,
   toggleBusinessSchema,
@@ -42,6 +44,20 @@ const superAdminLoginLimiter = rateLimit({
 });
 
 // === PUBLIC ===
+const recoveryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 3,
+  message: { message: 'Terlalu banyak permintaan reset password. Silakan coba lagi dalam 15 menit.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 10,
+  message: { message: 'Terlalu banyak percobaan OTP. Silakan coba lagi dalam 15 menit.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+router.post('/forgot-password', recoveryLimiter, validate(forgotPasswordSchema), forgotPassword);
+router.post('/verify-otp', otpLimiter, validate(verifyOtpSchema), verifyOtp);
+router.post('/reset-password', otpLimiter, validate(resetPasswordSchema), resetPassword);
+
 // POST /api/superadmin/login
 router.post('/login', superAdminLoginLimiter, validate(loginSchema), login);
 router.get('/me', requireSuperAdmin, getSession);

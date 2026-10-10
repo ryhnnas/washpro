@@ -16,6 +16,11 @@ const api = axios.create({
 let isRefreshing = false;
 let failedQueue = [];
 
+const publicPaths = [
+  '/', '/login', '/register', '/verify-email', '/forgot-password', '/reset-password',
+  '/superadmin/login', '/superadmin/forgot-password', '/superadmin/reset-password',
+];
+
 const processQueue = (error) => {
   failedQueue.forEach((prom) => {
     if (error) prom.reject(error);
@@ -48,7 +53,6 @@ api.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/refresh') || originalRequest.url?.includes('/auth/login')) {
         localStorage.removeItem('user');
         localStorage.removeItem('token');
-        const publicPaths = ['/login', '/register', '/', '/superadmin/login'];
         if (!publicPaths.includes(currentPath)) {
           window.location.href = '/login';
         }
@@ -84,7 +88,6 @@ api.interceptors.response.use(
         processQueue(refreshError);
         localStorage.removeItem('user');
         localStorage.removeItem('token');
-        const publicPaths = ['/login', '/register', '/', '/superadmin/login'];
         if (!publicPaths.includes(currentPath)) {
           window.location.href = '/login';
         }

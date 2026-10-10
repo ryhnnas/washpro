@@ -55,14 +55,16 @@ const invalidateSubscriptionCache = (businessId) => {
 
 /**
  * Middleware: Cek apakah status langganan toko AKTIF (TRIAL atau ACTIVE).
- * Menggunakan in-memory cache TTL 5 menit untuk mengurangi DB queries.
+ * Reuse data segar dari userGuard dalam request yang sama; cache TTL 60 detik
+ * hanya digunakan jika middleware dipanggil tanpa data dari guard.
  */
 const checkSubscription = async (req, res, next) => {
   try {
     const businessId = req.user?.businessId;
     if (!businessId) return res.status(401).json({ message: 'Akses ditolak, businessId tidak ditemukan' });
 
-    const business = await getSubscriptionData(businessId);
+    const business = req.currentBusiness?.id === businessId
+      ? req.currentBusiness : await getSubscriptionData(businessId);
     if (!business) return res.status(404).json({ message: 'Data bisnis tidak ditemukan' });
 
     // Cek soft delete

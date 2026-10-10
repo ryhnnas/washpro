@@ -1,8 +1,11 @@
 const nodemailer = require('nodemailer');
 
-const sendEmail = async ({ to, subject, html }) => {
+const isConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+const sendEmail = async ({ to, subject, html, requireDelivery = false }) => {
   // Check if SMTP is configured. If not, fallback to console log.
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  if (!isConfigured()) {
+    if (requireDelivery) throw new Error('SMTP_NOT_CONFIGURED');
     console.log('\n============================================================');
     console.log(`[EMAIL DEV FALLBACK]`);
     console.log(`To: ${to}`);
@@ -40,7 +43,7 @@ const sendEmail = async ({ to, subject, html }) => {
     const info = await transporter.sendMail(mailOptions);
     return { ok: true, messageId: info.messageId };
   } catch (err) {
-    if (allowInsecureTls) {
+    if (allowInsecureTls || requireDelivery) {
       throw err;
     }
 
@@ -64,4 +67,4 @@ const sendEmail = async ({ to, subject, html }) => {
   }
 };
 
-module.exports = { sendEmail };
+module.exports = { sendEmail, isConfigured };

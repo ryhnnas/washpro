@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FileSpreadsheet, Search, ChevronLeft, ChevronRight, DollarSign, FileText, Loader2, TrendingUp } from 'lucide-react';
 import api from '../lib/axios';
 import DateFilter from '../components/DateFilter';
-import { getDateRange } from '../utils/dateRange';
+import { getDateRange, validateCustomDate, formatWibDate, formatWibDateKey } from '../utils/dateRange';
 import toast from 'react-hot-toast';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -20,6 +20,7 @@ export default function Reports() {
   const [dateFilter, setDateFilter] = useState('hari_ini');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
   const [page, setPage] = useState(1);
+  const invalidRange = dateFilter === 'kustom' && !!validateCustomDate(customDate);
 
   const [dailyRevenue, setDailyRevenue] = useState([]);
   const [statusBreakdown, setStatusBreakdown] = useState([]);
@@ -45,19 +46,20 @@ export default function Reports() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        if (invalidRange) { setLoading(false); return; }
         const { startDate, endDate } = getDateRange(dateFilter, customDate);
         if (dateFilter === 'kustom' && (!customDate.start || !customDate.end)) {
           setLoading(false);
           return;
         }
 
-        const statsRes = await api.get(`/dashboard/stats?startDate=${startDate}&endDate=${endDate}`);
-        setStats(statsRes.data);
-
-        const txRes = await api.get(`/transactions?page=${page}&limit=50&search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
-        setTransactions(txRes.data.data || []);
-
-        const chartRes = await api.get(`/reports/charts?startDate=${startDate}&endDate=${endDate}&search=${debouncedSearch}`);
+        const txRequest = api.get(`/transactions?page=${page}&limit=50&search=${debouncedSearch}&startDate=${startDate}&endDate=${endDate}`);
+        const chartRequest = api.get(`/reports/charts?startDate=${startDate}&endDate=${endDate}&search=${debouncedSearch}`);
+        const [txResult, chartResult] = await Promise.allSettled([txRequest, chartRequest]);
+        if (txResult.status === 'fulfilled') setTransactions(txResult.value.data.data || []);
+        if (chartResult.status === 'rejected') throw chartResult.reason;
+        const chartRes = chartResult.value;
+        setStats(chartRes.data.summary || { totalTransactions: 0, totalRevenue: 0 });
         setDailyRevenue(chartRes.data.dailyRevenue || []);
         setStatusBreakdown(chartRes.data.statusBreakdown || []);
         setTopServices(chartRes.data.topServices || []);
@@ -68,10 +70,11 @@ export default function Reports() {
       }
     };
     fetchData();
-  }, [page, debouncedSearch, dateFilter, customDate]);
+  }, [page, debouncedSearch, dateFilter, customDate, invalidRange]);
 
   // ==================== FUNGSI EXPORT PDF (SUDAH DIPERBAIKI) ====================
   const exportToPDF = async () => {
+    if (invalidRange) { toast.error(validateCustomDate(customDate)); return; }
     setExportLoading(true);
     const toastId = toast.loading('Membuat Laporan PDF...');
 
@@ -97,7 +100,7 @@ export default function Reports() {
       doc.setTextColor(100);
       doc.text('Laporan Transaksi Detail', 14, 30);
       doc.setFontSize(10);
-      doc.text(`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}`, 14, 36);
+      doc.text(`Periode: ${formatWibDate(startDate)} - ${formatWibDate(endDate)}`, 14, 36);
 
       doc.setFontSize(11);
       doc.setTextColor(0);
@@ -160,7 +163,7 @@ export default function Reports() {
         startY: 30,
         head: [['Tanggal', 'Pelanggan', 'Layanan', 'Total', 'Status']],
         body: transactions.map(t => [
-          new Date(t.startDate).toLocaleDateString('id-ID'),
+          formatWibDate(t.startDate),
           t.customerName || '-',
           t.serviceName,
           `Rp ${(t.payableAmount || t.totalPrice || 0).toLocaleString('id-ID')}`,
@@ -175,7 +178,7 @@ export default function Reports() {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(120);
-        doc.text(`Dicetak: ${new Date().toLocaleString('id-ID')} | Halaman ${i}/${pageCount} | WashPro Reports`, 14, doc.internal.pageSize.height - 10);
+        doc.text(`Dicetak: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} | Halaman ${i}/${pageCount} | WashPro Reports`, 14, doc.internal.pageSize.height - 10);
       }
 
       doc.save(`Laporan_${businessName.replace(/[^a-z0-9]/gi, '_')}.pdf`);
@@ -190,6 +193,7 @@ export default function Reports() {
   };
 
   const exportToExcel = async () => {
+    if (invalidRange) { toast.error(validateCustomDate(customDate)); return; }
     setExportLoading(true);
     const toastId = toast.loading('Membuat File Excel...');
     try {
@@ -212,8 +216,8 @@ export default function Reports() {
       
       // Block 2: Title
       summaryData.push(['LAPORAN KINERJA OPERASIONAL']);
-      summaryData.push([`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} s.d. ${new Date(endDate).toLocaleDateString('id-ID')}`]);
-      summaryData.push([`Tanggal Cetak: ${new Date().toLocaleString('id-ID')}`]);
+      summaryData.push([`Periode: ${formatWibDate(startDate)} s.d. ${formatWibDate(endDate)}`]);
+      summaryData.push([`Tanggal Cetak: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`]);
       if (debouncedSearch) {
         summaryData.push([`Filter Pencarian: "${debouncedSearch}"`]);
       } else {
@@ -468,14 +472,14 @@ export default function Reports() {
       // ==================== SHEET 2: DETAIL TRANSAKSI ====================
       const txHeaderData = [
         ['DETAIL TRANSAKSI HARIAN'],
-        [`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} s.d. ${new Date(endDate).toLocaleDateString('id-ID')}`],
+        [`Periode: ${formatWibDate(startDate)} s.d. ${formatWibDate(endDate)}`],
         [],
         ['No.', 'Tanggal', 'Pelanggan', 'Layanan', 'Status', 'Metode Pembayaran', 'Total Tagihan']
       ];
 
       const txRows = transactions.map((t, idx) => [
         idx + 1,
-        new Date(t.startDate).toLocaleDateString('id-ID'),
+        formatWibDate(t.startDate),
         t.customerName || t.customer?.name || '-',
         t.serviceName + (t.weight ? ` (${t.weight} kg)` : ''),
         t.status,
@@ -599,7 +603,7 @@ export default function Reports() {
 
       // Write and Download
       const cleanBusinessName = businessName.replace(/[^a-z0-9]/gi, '_');
-      const fileDate = new Date(startDate).toISOString().split('T')[0] + '_to_' + new Date(endDate).toISOString().split('T')[0];
+      const fileDate = formatWibDateKey(startDate) + '_to_' + formatWibDateKey(endDate);
       XLSX.writeFile(wb, `Laporan_${cleanBusinessName}_${fileDate}.xlsx`);
       toast.success('Excel berhasil diunduh!', { id: toastId });
     } catch (err) {
@@ -714,10 +718,10 @@ export default function Reports() {
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
-          <button onClick={exportToPDF} disabled={exportLoading} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
+          <button onClick={exportToPDF} disabled={exportLoading || invalidRange} className="flex-1 sm:flex-none px-6 py-3 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
             {exportLoading ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />} Export PDF
           </button>
-          <button onClick={exportToExcel} disabled={exportLoading} className="flex-1 sm:flex-none px-6 py-3 bg-emerald-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
+          <button onClick={exportToExcel} disabled={exportLoading || invalidRange} className="flex-1 sm:flex-none px-6 py-3 bg-emerald-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 disabled:opacity-50">
             {exportLoading ? <Loader2 className="animate-spin" size={18} /> : <FileSpreadsheet size={18} />} Export Excel
           </button>
         </div>
@@ -741,7 +745,7 @@ export default function Reports() {
                 transactions.length === 0 ? <tr><td colSpan="5" className="px-8 py-12 text-center text-slate-500">Tidak ada data</td></tr> :
                   transactions.map((t) => (
                     <tr key={t.id} className="hover:bg-slate-50">
-                      <td className="px-8 py-4 font-medium text-slate-600">{new Date(t.startDate).toLocaleDateString('id-ID')}</td>
+                      <td className="px-8 py-4 font-medium text-slate-600">{formatWibDate(t.startDate)}</td>
                       <td className="px-8 py-4 font-bold text-primary">{t.customerName}</td>
                       <td className="px-8 py-4"><span className="font-bold">{t.serviceName}</span><span className="text-slate-400 ml-2">({t.weight})</span></td>
                       <td className="px-8 py-4 text-right font-black text-emerald-600">Rp {t.totalPrice.toLocaleString('id-ID')}</td>

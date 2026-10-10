@@ -1,6 +1,8 @@
 import { Calendar } from 'lucide-react';
+import { validateCustomDate } from '../utils/dateRange';
 
 export default function DateFilter({ filter, setFilter, setCustomDate, customDate }) {
+  const error = filter === 'kustom' ? validateCustomDate(customDate) : '';
   return (
     <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
       <div className="relative">
@@ -27,6 +29,7 @@ export default function DateFilter({ filter, setFilter, setCustomDate, customDat
         <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4">
           <input 
             type="date" 
+            aria-label="Tanggal awal"
             value={customDate.start}
             onChange={(e) => setCustomDate({...customDate, start: e.target.value})}
             className="px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none text-primary text-sm shadow-sm focus:border-primary"
@@ -34,12 +37,14 @@ export default function DateFilter({ filter, setFilter, setCustomDate, customDat
           <span className="text-slate-400 font-bold">-</span>
           <input 
             type="date" 
+            aria-label="Tanggal akhir"
             value={customDate.end}
             onChange={(e) => setCustomDate({...customDate, end: e.target.value})}
             className="px-3 py-2 bg-white border border-slate-200 rounded-xl outline-none text-primary text-sm shadow-sm focus:border-primary"
           />
         </div>
       )}
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
     </div>
   );
 }

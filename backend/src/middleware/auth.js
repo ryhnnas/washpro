@@ -14,7 +14,10 @@ const authMiddleware = async (req, res, next) => {
     const verified = jwt.verify(token, process.env.JWT_SECRET);
     const user = await prisma.user.findUnique({
       where: { id: verified.id },
-      select: { id: true, businessId: true, role: true, sessionVersion: true },
+      select: {
+        id: true, businessId: true, role: true, sessionVersion: true,
+        name: true, email: true, phone: true, isEmailVerified: true, mustChangePassword: true,
+      },
     });
 
     if (!user) {
@@ -37,6 +40,7 @@ const authMiddleware = async (req, res, next) => {
       role: user.role,
       sessionVersion: user.sessionVersion,
     };
+    req.currentUser = user;
     next();
   } catch (err) {
     if (cookieToken && !headerToken) {

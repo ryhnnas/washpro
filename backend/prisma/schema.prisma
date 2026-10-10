@@ -21,8 +21,24 @@ model SuperAdmin {
   name      String
   email     String   @unique
   password  String
+  sessionVersion Int @default(0) @map("session_version")
+  passwordResetOtps SuperAdminPasswordResetOtp[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model SuperAdminPasswordResetOtp {
+  id           String    @id @default(uuid())
+  superAdminId String    @map("super_admin_id")
+  otp          String
+  expiresAt    DateTime  @map("expires_at")
+  usedAt       DateTime? @map("used_at")
+  attempts     Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  superAdmin SuperAdmin @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+
+  @@index([superAdminId, expiresAt])
 }
 
 model SubscriptionPlan {
@@ -65,6 +81,8 @@ model SubscriptionPayment {
   approvedById    String?       @map("approved_by_id")
   adminEmailNotifiedAt DateTime? @map("admin_email_notified_at")
   rejectionReason String?       @db.Text @map("rejection_reason")
+  rejectedAt      DateTime?     @map("rejected_at")
+  rejectedById    String?       @map("rejected_by_id")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
@@ -213,8 +231,7 @@ model Service {
   membershipBalances CustomerMembershipQuotaBalance[]
   membershipUsages   CustomerMembershipUsageLog[]
 
-  @@index([businessId])
-  @@index([businessId, isActive]) // Untuk filter layanan aktif
+  @@index([businessId, isActive]) // Layanan aktif per bisnis (juga melayani FK businessId)
 }
 
 enum ServiceType {
@@ -274,8 +291,7 @@ model Transaction {
   @@index([businessId, startDate])           // Laporan harian/mingguan
   @@index([businessId, status])              // Filter pesanan aktif
   @@index([businessId, customerPhone])       // Cari transaksi by HP
-  @@index([businessId, isOverdue])           // Filter overdue
-  @@index([status, startDate])               // Global query (opsional)
+  @@index([businessId, status, estimatedCompletionAt]) // Query overdue (status IN + estimatedCompletionAt < now)
 }
 
 // =============================================
@@ -345,7 +361,6 @@ model WhatsAppQueue {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   // ==================== STRATEGIC INDEXES ====================
-  @@index([businessId, status])           // Ambil antrian per bisnis
   @@index([status, createdAt])            // Proses antrian global
   @@index([businessId, status, attempts]) // Retry logic
 }
@@ -430,6 +445,7 @@ model CustomerMembership {
 
   @@index([businessId, status])
   @@index([customerId, status])
+  @@index([businessId, customerId, status])
 }
 
 model CustomerMembershipQuotaBalance {
