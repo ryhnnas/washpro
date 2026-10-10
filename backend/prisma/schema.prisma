@@ -213,8 +213,7 @@ model Service {
   membershipBalances CustomerMembershipQuotaBalance[]
   membershipUsages   CustomerMembershipUsageLog[]
 
-  @@index([businessId])
-  @@index([businessId, isActive]) // Untuk filter layanan aktif
+  @@index([businessId, isActive]) // Layanan aktif per bisnis (juga melayani FK businessId)
 }
 
 enum ServiceType {
@@ -274,8 +273,7 @@ model Transaction {
   @@index([businessId, startDate])           // Laporan harian/mingguan
   @@index([businessId, status])              // Filter pesanan aktif
   @@index([businessId, customerPhone])       // Cari transaksi by HP
-  @@index([businessId, isOverdue])           // Filter overdue
-  @@index([status, startDate])               // Global query (opsional)
+  @@index([businessId, status, estimatedCompletionAt]) // Query overdue (status IN + estimatedCompletionAt < now)
 }
 
 // =============================================
@@ -345,7 +343,6 @@ model WhatsAppQueue {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   // ==================== STRATEGIC INDEXES ====================
-  @@index([businessId, status])           // Ambil antrian per bisnis
   @@index([status, createdAt])            // Proses antrian global
   @@index([businessId, status, attempts]) // Retry logic
 }
@@ -430,6 +427,7 @@ model CustomerMembership {
 
   @@index([businessId, status])
   @@index([customerId, status])
+  @@index([businessId, customerId, status])
 }
 
 model CustomerMembershipQuotaBalance {
