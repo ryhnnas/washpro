@@ -10,6 +10,17 @@ const { resolveReactivationStatus } = require('../services/businessLifecycleServ
 
 const REACTIVATION_LABEL = { ACTIVE: 'Aktif', TRIAL: 'Trial', EXPIRED: 'Kadaluarsa' };
 
+const BUSINESS_STATUSES = ['TRIAL', 'ACTIVE', 'PENDING_PAYMENT', 'EXPIRED', 'SUSPENDED'];
+const PAYMENT_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+
+const parsePagination = (query) => {
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+const withTotalPages = (total, limit) => Math.max(1, Math.ceil(total / limit));
+
 // ==================== LOGIN ====================
 const login = async (req, res) => {
   const { email, password } = req.body;
@@ -87,18 +98,21 @@ const getDashboardStats = async (req, res) => {
 // ==================== KELOLA TOKO (BUSINESSES) ====================
 const getBusinesses = async (req, res) => {
   try {
-    const { status, search, page = 1, limit = 20 } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { status, search } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
+    if (status && !BUSINESS_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Status toko tidak valid' });
+    }
 
     const where = { deletedAt: null };
     if (status) where.subscriptionStatus = status;
-    if (search) where.name = { contains: search };
+    if (search && String(search).trim()) where.name = { contains: String(search).trim() };
 
     const [businesses, total] = await Promise.all([
       prisma.business.findMany({
         where,
         skip,
-        take: Number(limit),
+        take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
           users: { where: { role: 'OWNER' }, select: { name: true, email: true } },
@@ -108,7 +122,7 @@ const getBusinesses = async (req, res) => {
       prisma.business.count({ where }),
     ]);
 
-    res.json({ businesses, total, page: Number(page), limit: Number(limit) });
+    res.json({ businesses, total, page, limit, totalPages: withTotalPages(total, limit) });
   } catch (err) {
     sendError(res, err, 500);
   }
@@ -218,17 +232,21 @@ const deleteBusiness = async (req, res) => {
 // ==================== KELOLA PEMBAYARAN ====================
 const getPayments = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
+    const { status, search } = req.query;
+    const { page, limit, skip } = parsePagination(req.query);
+    if (status && !PAYMENT_STATUSES.includes(status)) {
+      return res.status(400).json({ message: 'Status pembayaran tidak valid' });
+    }
 
     const where = {};
     if (status) where.status = status;
+    if (search && String(search).trim()) where.business = { name: { contains: String(search).trim() } };
 
     const [payments, total] = await Promise.all([
       prisma.subscriptionPayment.findMany({
         where,
         skip,
-        take: Number(limit),
+        take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
           business: { select: { name: true, phone: true } },
@@ -239,7 +257,7 @@ const getPayments = async (req, res) => {
       prisma.subscriptionPayment.count({ where }),
     ]);
 
-    res.json({ payments, total, page: Number(page), limit: Number(limit) });
+    res.json({ payments, total, page, limit, totalPages: withTotalPages(total, limit) });
   } catch (err) {
     sendError(res, err, 500);
   }

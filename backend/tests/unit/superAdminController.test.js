@@ -1,7 +1,7 @@
 const prisma = require('../../src/config/prisma');
 const { invalidateSubscriptionCache } = require('../../src/middleware/checkSubscription');
 const {
-  toggleBusiness, deleteBusiness, rejectPayment,
+  toggleBusiness, deleteBusiness, rejectPayment, getBusinesses, getPayments,
 } = require('../../src/controllers/superAdminController');
 
 jest.mock('../../src/config/prisma', () => ({
@@ -112,5 +112,55 @@ describe('rejectPayment', () => {
       status: 'REJECTED', rejectedById: 'sa-1', rejectedAt: expect.any(Date), rejectionReason: 'Nominal tidak sesuai',
     });
     expect(data).not.toHaveProperty('approvedById');
+  });
+});
+
+describe('list endpoints', () => {
+  beforeEach(() => {
+    prisma.business.findMany.mockResolvedValue([]);
+    prisma.business.count.mockResolvedValue(45);
+    prisma.subscriptionPayment.findMany.mockResolvedValue([]);
+    prisma.subscriptionPayment.count.mockResolvedValue(3);
+  });
+
+  it('clamps limit, computes skip and totalPages for businesses', async () => {
+    const res = makeRes();
+    await getBusinesses({ query: { page: '3', limit: '500', search: ' jaya ', status: 'ACTIVE' } }, res);
+    const args = prisma.business.findMany.mock.calls[0][0];
+    expect(args.take).toBe(100);
+    expect(args.skip).toBe(200);
+    expect(args.where).toEqual({ deletedAt: null, subscriptionStatus: 'ACTIVE', name: { contains: 'jaya' } });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ total: 45, page: 3, limit: 100, totalPages: 1 }));
+  });
+
+  it('falls back to page 1 / limit 20 on garbage input', async () => {
+    const res = makeRes();
+    await getBusinesses({ query: { page: '-4', limit: 'abc' } }, res);
+    const args = prisma.business.findMany.mock.calls[0][0];
+    expect(args.skip).toBe(0);
+    expect(args.take).toBe(20);
+  });
+
+  it('rejects an unknown business status', async () => {
+    const res = makeRes();
+    await getBusinesses({ query: { status: 'DROP TABLE' } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(prisma.business.findMany).not.toHaveBeenCalled();
+  });
+
+  it('filters payments by status and business name', async () => {
+    const res = makeRes();
+    await getPayments({ query: { status: 'PENDING', search: 'laundry', page: '2', limit: '10' } }, res);
+    const args = prisma.subscriptionPayment.findMany.mock.calls[0][0];
+    expect(args.where).toEqual({ status: 'PENDING', business: { name: { contains: 'laundry' } } });
+    expect(args.skip).toBe(10);
+    expect(args.take).toBe(10);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ total: 3, page: 2, limit: 10, totalPages: 1 }));
+  });
+
+  it('rejects an unknown payment status', async () => {
+    const res = makeRes();
+    await getPayments({ query: { status: 'NOPE' } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
   });
 });
