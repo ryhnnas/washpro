@@ -134,8 +134,29 @@ Setiap push/PR menjalankan:
 
 1. `prisma migrate deploy` + seed + unit/integration test (MySQL terisolasi)
 2. Migration upgrade check (schema pre-hardening → hardening migrations)
-3. Frontend lint (`--max-warnings=0`) + production build
+3. Frontend lint (`--max-warnings=0`) + production build + tes artefak SEO
 4. Playwright E2E (Chromium, `GOWA_ENABLED=false`, database test terpisah)
+
+### Tes Optimasi Query
+
+`npm test` menjalankan tes jumlah pemanggilan Prisma, isolasi tenant, middleware,
+perhitungan dashboard, kuota membership, dan worker WhatsApp tanpa koneksi database.
+Lookup layanan dan validasi paket dilakukan per batch; penulisan kuota dengan jumlah
+pengurangan berbeda tetap dikelompokkan agar pemeriksaan saldo berlangsung atomik.
+
+CI juga mengaktifkan empat tes integrasi MySQL 8 dengan `WASHPRO_QUERY_DB_TESTS=1`.
+Tes ini memeriksa jumlah SQL SELECT, pencocokan nama tanpa membedakan kapital/aksen
+sesuai collation schema, isolasi tenant, pengembalian kuota, dan rollback saat saldo
+tidak cukup. Untuk menjalankannya lokal, gunakan MySQL terpisah yang sudah dimigrasi,
+set `DATABASE_URL` ke database `washpro_test` pada `localhost` atau `127.0.0.1`, lalu:
+
+```bash
+WASHPRO_QUERY_DB_TESTS=1 npm test --workspace=backend
+```
+
+Tanpa flag tersebut, empat tes database dilewati. Fixture dibersihkan hanya untuk
+tenant yang dibuat oleh tes. Guard overlap worker WhatsApp berlaku dalam satu proses
+backend; deployment dengan beberapa worker masih memerlukan klaim antrean terdistribusi.
 
 ### Reset Database Lokal
 
@@ -158,6 +179,31 @@ mysqldump -u user -p washpro > backup_$(date +%Y%m%d).sql
 2. `npx prisma migrate deploy` (bukan `migrate dev`)
 3. Build & deploy via Docker Compose atau platform PaaS
 4. Pastikan Nginx SPA memakai security headers (CSP, X-Frame-Options) — lihat `frontend/nginx.conf`
+
+### SEO Landing Page
+
+Domain canonical: `https://washpro.my.id/`. Judul, deskripsi, metadata berbagi,
+dan structured data dikelola di `frontend/seo.mjs`.
+
+```bash
+npm run build
+npm run test:seo --workspace=frontend
+```
+
+Build menghasilkan `frontend/dist/index.html` dengan konten landing page lengkap
+sebelum JavaScript berjalan, `app.html` dengan `noindex` untuk halaman akun,
+serta `robots.txt` dan `sitemap.xml`. Halaman akun tetap memakai autentikasi
+aplikasi yang sama; `noindex` hanya mengatur pengindeksan mesin pencari.
+
+Gunakan konfigurasi `frontend/nginx.conf` saat deploy: `/` menyajikan landing
+page, route aplikasi menyajikan `app.html`, dan URL tidak dikenal mengembalikan
+HTTP 404. Jika memakai hosting selain Nginx, terapkan aturan yang sama; fallback
+semua URL ke `index.html` akan menyajikan salinan landing page di halaman akun.
+`vite preview` hanya untuk memeriksa build frontend, bukan aturan HTTP Nginx.
+
+Setelah deploy, verifikasi domain di Google Search Console dan kirim sitemap
+`https://washpro.my.id/sitemap.xml`. Jalankan tes SEO setelah build pada CI atau
+sebelum deploy untuk memeriksa artefak yang akan diterbitkan.
 
 ## Keamanan
 

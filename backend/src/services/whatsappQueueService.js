@@ -13,6 +13,7 @@ const QUEUE_STATUS = {
 
 const MAX_ATTEMPTS = 5;
 const BATCH_SIZE = 10;
+let processing = false;
 
 /**
  * Menambahkan pesan ke antrean
@@ -36,6 +37,8 @@ const addToQueue = async ({ businessId, phone, message }) => {
  * Memproses antrean pesan (Worker)
  */
 const processQueue = async (whatsappService) => {
+  if (processing) return;
+  processing = true;
   try {
     if (!prisma.whatsAppQueue) {
       console.warn('[WA-QUEUE] Table WhatsAppQueue belum tersedia. Pastikan migrasi sudah dijalankan.');
@@ -54,11 +57,15 @@ const processQueue = async (whatsappService) => {
 
     if (pendingMessages.length === 0) return;
 
+    const businessIds = [...new Set(pendingMessages.map((msg) => msg.businessId))];
+    const sessions = await prisma.whatsAppSession.findMany({ where: { businessId: { in: businessIds } } });
+    const sessionsByBusiness = new Map(sessions.map((session) => [session.businessId, session]));
+
     console.log(`[WA-QUEUE] Memproses ${pendingMessages.length} pesan...`);
 
     for (const msg of pendingMessages) {
       // Cek apakah session masih terkoneksi sebelum mengirim
-      const session = await prisma.whatsAppSession.findUnique({ where: { businessId: msg.businessId } });
+      const session = sessionsByBusiness.get(msg.businessId);
       
       if (!session || session.status !== 'connected') {
         console.log(`[WA-QUEUE] Bisnis ${msg.businessId} tidak terkoneksi. Skip.`);
@@ -75,6 +82,7 @@ const processQueue = async (whatsappService) => {
           phone: msg.customerPhone,
           message: msg.message,
           skipQueue: true, // Jangan masukkan ke queue lagi jika gagal di sini (handle di catch)
+          session,
         });
 
         if (result.ok) {
@@ -100,6 +108,8 @@ const processQueue = async (whatsappService) => {
     }
   } catch (error) {
     console.error('[WA-QUEUE] Error saat memproses queue:', error.message);
+  } finally {
+    processing = false;
   }
 };
 

@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "plus jakarta sans",
+        "files": [
+          "frontend/src/pages/LandingPage.css"
+        ],
+        "createdAt": "2026-10-10T15:42:30.400Z",
+        "reason": "Agent: intentionally retain the existing app font loaded in frontend/index.html and used in frontend/src/index.css for consistent WashPro branding."
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "files": [
+          "backend/src/controllers/authController.js"
+        ],
+        "createdAt": "2026-10-10T16:17:30.844Z",
+        "reason": "Agent: Arial is an intentional system-font fallback in the existing verification OTP and password-reset HTML email templates; preserve email-client compatibility during the backend query optimization."
+      }
+    ]
+  }
+}

@@ -281,12 +281,13 @@ const login = async (req, res) => {
 // GET SESSION — validasi cookie auth, return profil user
 const getSession = async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
+    const user = req.currentUser?.id === req.user.id ? req.currentUser : await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { id: true, name: true, email: true, role: true, businessId: true, phone: true, isEmailVerified: true, mustChangePassword: true },
     });
     if (!user) return res.status(404).json({ message: 'User tidak ditemukan' });
-    res.json({ user });
+    const { id, name, email, role, businessId, phone, isEmailVerified, mustChangePassword } = user;
+    res.json({ user: { id, name, email, role, businessId, phone, isEmailVerified, mustChangePassword } });
   } catch (error) {
     sendError(res, error, 500);
   }

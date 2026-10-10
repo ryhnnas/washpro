@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import PageSkeleton from './components/PageSkeleton';
+import RouteSeo from './components/RouteSeo';
 import MainLayout from './layouts/MainLayout';
 import superAdminApi from './lib/superAdminAxios';
 import { Toaster } from 'react-hot-toast';
@@ -70,6 +71,7 @@ function App() {
       <AppProvider>
         <ErrorBoundary>
           <Router>
+            <RouteSeo />
             <Toaster position="top-center" reverseOrder={false} />
             <Suspense fallback={<PageSkeleton />}>
               <Routes>

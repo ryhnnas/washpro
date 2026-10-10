@@ -6,7 +6,7 @@ const userGuard = async (req, res, next) => {
     const businessIdFromToken = req.user?.businessId;
     if (!userId) return res.status(401).json({ message: 'Akses ditolak, user tidak ditemukan' });
 
-    const user = await prisma.user.findUnique({
+    const user = req.currentUser?.id === userId ? req.currentUser : await prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -25,7 +25,7 @@ const userGuard = async (req, res, next) => {
 
     const business = await prisma.business.findUnique({
       where: { id: user.businessId },
-      select: { subscriptionStatus: true, deletedAt: true },
+      select: { id: true, subscriptionStatus: true, deletedAt: true, trialEndAt: true, subscriptionEndAt: true },
     });
 
     if (business?.deletedAt) {
@@ -64,6 +64,7 @@ const userGuard = async (req, res, next) => {
     }
 
     req.currentUser = user;
+    req.currentBusiness = business;
     next();
   } catch (err) {
     next(err);

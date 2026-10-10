@@ -1,6 +1,7 @@
 const prisma = require('../config/prisma');
 const whatsappService = require('../services/whatsappService');
 const membershipService = require('../services/membershipService');
+const { resolveTransactionServices } = require('../services/transactionService');
 const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 const { sendError, handleControllerError } = require('../utils/errorResponse');
 const { DomainError } = require('../utils/domainError');
@@ -137,17 +138,7 @@ const createTransaction = async (req, res) => {
         throw new DomainError(400, 'INVALID_TRANSACTION_ITEMS', 'Minimal satu rincian layanan wajib diisi');
       }
 
-      const selectedServices = await Promise.all(
-        normalizedItems.map(async (item) => {
-          let svc = null;
-          if (item.serviceId) svc = await tx.service.findFirst({ where: { id: item.serviceId, businessId } });
-          if (!svc && item.serviceName) svc = await tx.service.findFirst({ where: { name: item.serviceName, businessId } });
-          if (!svc) {
-            throw new DomainError(404, 'SERVICE_NOT_FOUND', `Layanan tidak ditemukan: ${item.serviceName || item.serviceId}`);
-          }
-          return { service: svc, qty: item.qty };
-        })
-      );
+      const selectedServices = await resolveTransactionServices(tx, businessId, normalizedItems);
       const mergedByService = new Map();
       selectedServices.forEach(({ service, qty }) => {
         const key = service.id;
@@ -229,19 +220,10 @@ const createTransaction = async (req, res) => {
       });
 
       if (activeMembership?.id) {
-        for (const item of itemBreakdowns) {
-          if (!item.isUsingMembership || item.usedQty <= 0) continue;
-          await membershipService.consumeQuotaAndLog({
-            tx,
-            businessId,
-            membershipId: activeMembership.id,
-            transactionId: created.id,
-            serviceId: item.serviceId,
-            usedQty: item.usedQty,
-            coveredAmount: item.coveredAmount,
-            payableAmount: item.payableAmount,
-          });
-        }
+        await membershipService.consumeQuotaAndLog({
+          tx, businessId, membershipId: activeMembership.id,
+          transactionId: created.id, items: itemBreakdowns,
+        });
       }
 
       return {

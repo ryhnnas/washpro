@@ -9,71 +9,48 @@ class SettingsHttpError extends Error {
   }
 }
 
-const findOwnedMembershipTemplate = async (tx, businessId, templateId) => {
-  const template = await tx.membershipPackageTemplate.findFirst({
-    where: { id: templateId, businessId },
-  });
-  if (!template) {
-    throw new SettingsHttpError(404, 'Paket membership tidak ditemukan');
-  }
-  return template;
-};
-
-const assertServicesOwnedByBusiness = async (tx, businessId, items) => {
-  if (!Array.isArray(items) || items.length === 0) return;
-
-  const serviceIds = [...new Set(items.map((i) => i.serviceId).filter(Boolean))];
-  if (serviceIds.length === 0) return;
-
-  const ownedCount = await tx.service.count({
-    where: { businessId, id: { in: serviceIds } },
-  });
-
-  if (ownedCount !== serviceIds.length) {
-    throw new SettingsHttpError(403, 'Satu atau lebih layanan tidak valid untuk bisnis ini');
-  }
-};
-
-/**
- * Sync membership packages for the active tenant inside an open transaction.
- * Validates template + service ownership before mutating quota rows.
- */
+/** Validate the whole batch before replacing any tenant-owned quota rows. */
 const syncMembershipPackages = async (tx, businessId, membershipPackages) => {
-  for (const pkg of membershipPackages) {
-    if (!pkg.name) continue;
-
-    let template;
-    if (pkg.id) {
-      await findOwnedMembershipTemplate(tx, businessId, pkg.id);
-      template = await tx.membershipPackageTemplate.update({
-        where: { id: pkg.id },
-        data: { name: pkg.name, durationDays: Number(pkg.durationDays) || 30 },
-      });
-    } else {
-      template = await tx.membershipPackageTemplate.create({
-        data: {
-          businessId,
-          name: pkg.name,
-          durationDays: Number(pkg.durationDays) || 30,
-          isActive: true,
-        },
-      });
+  const packages = membershipPackages.filter((pkg) => pkg.name);
+  const templateIds = [...new Set(packages.map((pkg) => pkg.id).filter(Boolean).map((id) => id.toLowerCase()))];
+  if (templateIds.length) {
+    const owned = await tx.membershipPackageTemplate.findMany({
+      where: { businessId, id: { in: templateIds } },
+      select: { id: true },
+    });
+    if (owned.length !== templateIds.length) {
+      throw new SettingsHttpError(404, 'Paket membership tidak ditemukan');
     }
+  }
 
-    if (Array.isArray(pkg.items)) {
-      await assertServicesOwnedByBusiness(tx, businessId, pkg.items);
-      await tx.membershipPackageQuotaItem.deleteMany({ where: { templateId: template.id } });
-      if (pkg.items.length > 0) {
-        await tx.membershipPackageQuotaItem.createMany({
-          data: pkg.items.map((i) => ({
-            templateId: template.id,
-            serviceId: i.serviceId,
-            quotaAmount: Number(i.quotaAmount) || 0,
-            deductionRate: Number(i.deductionRate) || 1,
-          })),
-        });
-      }
+  const serviceIds = [...new Set(packages.flatMap((pkg) =>
+    Array.isArray(pkg.items) ? pkg.items.map((item) => item.serviceId).filter(Boolean).map((id) => id.toLowerCase()) : []
+  ))];
+  if (serviceIds.length) {
+    const ownedCount = await tx.service.count({ where: { businessId, id: { in: serviceIds } } });
+    if (ownedCount !== serviceIds.length) {
+      throw new SettingsHttpError(403, 'Satu atau lebih layanan tidak valid untuk bisnis ini');
     }
+  }
+
+  const replacements = new Map();
+  for (const pkg of packages) {
+    const data = { name: pkg.name, durationDays: Number(pkg.durationDays) || 30 };
+    const template = pkg.id
+      ? await tx.membershipPackageTemplate.update({ where: { id: pkg.id.toLowerCase(), businessId }, data })
+      : await tx.membershipPackageTemplate.create({ data: { businessId, ...data, isActive: true } });
+    // Duplicate IDs retain the final supplied items; omitting items only renames.
+    if (Array.isArray(pkg.items)) replacements.set(template.id, pkg.items);
+  }
+
+  if (replacements.size) {
+    await tx.membershipPackageQuotaItem.deleteMany({ where: { templateId: { in: [...replacements.keys()] } } });
+    const data = [...replacements].flatMap(([templateId, items]) => items.map((item) => ({
+      templateId, serviceId: item.serviceId?.toLowerCase(),
+      quotaAmount: Number(item.quotaAmount) || 0,
+      deductionRate: Number(item.deductionRate) || 1,
+    })));
+    if (data.length) await tx.membershipPackageQuotaItem.createMany({ data });
   }
 };
 
