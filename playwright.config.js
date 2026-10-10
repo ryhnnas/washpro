@@ -27,6 +27,7 @@ module.exports = defineConfig({
   reporter: [['html', { open: 'never' }], ['list']],
 
   use: {
+    channel: process.env.PLAYWRIGHT_CHANNEL || (!process.env.CI && process.platform === 'darwin' ? 'chrome' : undefined),
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
@@ -70,11 +71,18 @@ module.exports = defineConfig({
     {
       name: 'owner',
       testMatch: /(cashier|tracking|navigation|dashboard|customers|subscription)\.spec\.js/,
+      testIgnore: /staff-dashboard\.spec\.js/,
       dependencies: ['setup'],
       use: {
         browserName: 'chromium',
         storageState: 'e2e/.auth/owner.json',
       },
+    },
+    {
+      name: 'staff',
+      testMatch: /staff-dashboard\.spec\.js/,
+      dependencies: ['setup'],
+      use: { browserName: 'chromium', storageState: 'e2e/.auth/staff.json' },
     },
     {
       name: 'superadmin',

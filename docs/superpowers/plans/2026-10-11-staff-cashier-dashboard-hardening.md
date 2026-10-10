@@ -1,6 +1,6 @@
 # Staff/Cashier Dashboard Hardening Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` for native execution, or `superpowers:subagent-driven-development` if the user selects delegation. Implement task-by-task using the checkboxes below. This document is a plan; application code has not been changed.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` for native execution, or `superpowers:subagent-driven-development` if the user selects delegation. Implement task-by-task using the checkboxes below. This approved plan has been implemented; verification evidence is recorded below.
 
 **Goal:** Menutup delapan masalah audit dashboard staff/kasir: preview membership, nama pelanggan, status penyimpanan, nota WhatsApp, kegagalan pemuatan data, permission UI, periode tujuh hari, dan timezone pesanan hari ini.
 
@@ -95,7 +95,7 @@ Urutan: **1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9**. Task 3 memakai he
 
 **Interfaces:** Tetap memakai `customerName: string` dan `requireCustomerName: true`. Tidak menghapus kolom Prisma. GET full/public selalu mengembalikan nilai efektif true.
 
-- [ ] **1. Tambah test schema sebelum patch.**
+- [x] **1. Tambah test schema sebelum patch.**
 
 ```js
 const { createTransactionSchema } = require('../../src/schemas/transactionSchema');
@@ -114,8 +114,8 @@ test('trims a valid name', () => {
 
 Tambahkan di test settings: record lama `requireCustomerName:false` menghasilkan full/public response true; update tanpa field nama menulis true. Mock Prisma memakai struktur suite yang sudah ada.
 
-- [ ] **2. Jalankan test dan pastikan kasus baru gagal.** `npm test --workspace=backend -- transactionNamePolicy settingController`.
-- [ ] **3. Terapkan kebijakan secara konsisten.**
+- [x] **2. Jalankan test dan pastikan kasus baru gagal.** `npm test --workspace=backend -- transactionNamePolicy settingController`.
+- [x] **3. Terapkan kebijakan secara konsisten.**
 
 ```js
 // transactionSchema.js
@@ -130,8 +130,8 @@ requireCustomerName: true,
 
 Hapus conditional render `settings?.requireCustomerName !== false` di kasir. Input tetap `required`; beri `id="cashier-customer-name"` dan label `htmlFor` agar test/accessibility tidak bergantung placeholder. Form `onSubmit` memeriksa hasil trim sebelum POST. Hook settings menempatkan `requireCustomerName:true` setelah spread data/payload agar nilai lama tidak menimpanya.
 
-- [ ] **4. Verifikasi:** schema/settings tests lulus; browser fixture settings false tetap menampilkan field required; tanpa nama tidak ada POST; owner tidak melihat toggle; toggle nomor/alamat tetap bekerja.
-- [ ] **5. Commit terfokus saat eksekusi sudah diizinkan:** `fix(cashier): require customer name consistently`.
+- [x] **4. Verifikasi:** schema/settings tests lulus; browser fixture settings false tetap menampilkan field required; tanpa nama tidak ada POST; owner tidak melihat toggle; toggle nomor/alamat tetap bekerja.
+- [x] **5. Commit terfokus saat eksekusi sudah diizinkan:** `fix(cashier): require customer name consistently`.
 
 ## Task 2: Preview membership konsisten dengan layanan gabungan
 
@@ -147,7 +147,7 @@ Hapus conditional render `settings?.requireCustomerName !== false` di kasir. Inp
 - Menghasilkan `{ totalPrice, coveredAmount, payableAmount, items }`; setiap item memiliki `{ serviceId, serviceName, unit, qty, lineTotal, coveredAmount, payableAmount, consumedQuota }`.
 - Fungsi murni, tidak memutasi input. Backend `calculateCoverage` dan penggabungan `mergedByService` tetap menjadi acuan.
 
-- [ ] **1. Tambah test regresi nominal, bukan hanya detail internal.**
+- [x] **1. Tambah test regresi nominal, bukan hanya detail internal.**
 
 ```js
 import assert from 'node:assert/strict';
@@ -171,8 +171,8 @@ test('a missing package never defaults to full coverage', () => {
 
 Tambahkan test rate 2/kuota 10/qty 6 → used 10, cover Rp40.000, bayar Rp8.000; qty pecahan; dua service memakai saldo masing-masing; membership inactive; saldo nol; total penuh ditutup membership. Tambahkan test backend duplicate 6+6 dengan saldo 10 menghasilkan angka yang sama melalui `createTransaction`, memakai fixture `tx` suite queryOptimization.
 
-- [ ] **2. Run red:** `node --test frontend/scripts/cashierPreview.test.mjs`; `npm test --workspace=backend -- queryOptimization`.
-- [ ] **3. Implementasi perhitungan:** deduplicate serviceId dengan Map, jumlahkan qty, baru hitung satu kali per service.
+- [x] **2. Run red:** `node --test frontend/scripts/cashierPreview.test.mjs`; `npm test --workspace=backend -- queryOptimization`.
+- [x] **3. Implementasi perhitungan:** deduplicate serviceId dengan Map, jumlahkan qty, baru hitung satu kali per service.
 
 ```js
 const grouped = new Map();
@@ -196,8 +196,8 @@ const payableAmount = lineTotal - coveredAmount;
 
 Gunakan helper untuk subtotal dan preview UI. Hapus efek perhitungan coverage lama; tampilkan “Subtotal”, “Potongan membership”, “Tagihan setelah membership”. Gunakan matchedCustomer melalui phone yang sama dengan backend; saat phone kosong jangan memakai kecocokan nama untuk memberikan preview membership. Form masih mengirim serviceId/qty, nominal backend tetap tidak dipercaya dari klien.
 
-- [ ] **4. Run green dan browser:** test helper + test backend; input dua baris 6kg, bandingkan preview dan respons kanonis. Uji ulang qty pecahan dan payable nol.
-- [ ] **5. Commit:** `fix(cashier): align membership preview with merged services`.
+- [x] **4. Run green dan browser:** test helper + test backend; input dua baris 6kg, bandingkan preview dan respons kanonis. Uji ulang qty pecahan dan payable nol.
+- [x] **5. Commit:** `fix(cashier): align membership preview with merged services`.
 
 ## Task 3: Pisahkan transaksi tersimpan, refresh pelanggan, dan status WhatsApp
 
@@ -212,7 +212,7 @@ Gunakan helper untuk subtotal dan preview UI. Hapus efek perhitungan coverage la
 - State `savedTransaction` menyimpan respons kanonis; `saveError`, `refreshError`, dan `whatsappOutcome` tidak menimpa satu sama lain.
 - `classifyWhatsAppOutcome(result)` menghasilkan `'sent'|'queued'|'skipped'|'failed'`; exported dari `cashierReceipt.js` untuk unit test.
 
-- [ ] **1. Test angka nota dan browser status simpan.**
+- [x] **1. Test angka nota dan browser status simpan.**
 
 ```js
 import assert from 'node:assert/strict';
@@ -232,8 +232,8 @@ test('queued is not delivered even when an error is present', () => {
 
 Browser fixture: POST returns 201/tx-1; berikutnya GET customers 500. Assert “Transaksi tersimpan”, ID tx-1, peringatan refresh terpisah, form reset, jumlah POST tepat 1. Klik retry pelanggan: jumlah POST tetap 1. Test membership+WA failed, membership+WA queued, BAYAR_NANTI, phone kosong, konflik 409 (form tidak reset), double click saat pending (satu POST).
 
-- [ ] **2. Run red:** `node --test frontend/scripts/cashierReceipt.test.mjs`; mock Playwright test “saved transaction survives customer refresh failure”.
-- [ ] **3. Refactor alur submit terbatas:** tangani hanya POST pada blok error penyimpanan, lalu efek lanjutan terpisah.
+- [x] **2. Run red:** `node --test frontend/scripts/cashierReceipt.test.mjs`; mock Playwright test “saved transaction survives customer refresh failure”.
+- [x] **3. Refactor alur submit terbatas:** tangani hanya POST pada blok error penyimpanan, lalu efek lanjutan terpisah.
 
 ```js
 let transaction;
@@ -263,8 +263,8 @@ Implementasikan cabang 409 secara eksplisit sebelum setSaveError generik: reload
 
 `classifyWhatsAppOutcome`: queued dahulu, lalu ok/sent, lalu skipped, sisanya failed. Manual receipt menyebut subtotal, potongan membership, tagihan setelah membership, dan “Belum dibayar” untuk BAYAR_NANTI. `payableAmount ?? totalPrice`, bukan `payableAmount || totalPrice`, untuk menjaga nol. Gunakan `estimatedCompletionAt` server dan format `timeZone:'Asia/Jakarta'`. Nama/nomor/layanan memakai saved transaction. Jangan mengirim WA saat test; intercept `window.open` dan periksa URL/message.
 
-- [ ] **4. Run green:** unit nota + mock browser; verifikasi status WA tidak tertimpa pesan membership dan payload WA full coverage tidak menyebut gross sebagai tagihan.
-- [ ] **5. Commit:** `fix(cashier): preserve saved outcome and canonical receipt amounts`.
+- [x] **4. Run green:** unit nota + mock browser; verifikasi status WA tidak tertimpa pesan membership dan payload WA full coverage tidak menyebut gross sebagai tagihan.
+- [x] **5. Commit:** `fix(cashier): preserve saved outcome and canonical receipt amounts`.
 
 ## Task 4: Loading, error, dan retry pada kasir/settings
 
@@ -272,7 +272,7 @@ Implementasikan cabang 409 secara eksplisit sebelum setSaveError generik: reload
 
 **Interfaces:** AppContext menambah `settingsError: string` dan menggunakan `settingsLoading` yang sudah ada; `refreshSettings(): Promise<void>`. STAFF tetap memakai settings/public, OWNER full settings. Kasir mempunyai state loading/error services dan customers, terpisah dari status simpan.
 
-- [ ] **1. Browser test error layanan dan retry tanpa kehilangan form.**
+- [x] **1. Browser test error layanan dan retry tanpa kehilangan form.**
 
 ```js
 test('service fetch failure has a retry and preserves the customer name', async ({ page }) => {
@@ -289,8 +289,8 @@ test('service fetch failure has a retry and preserves the customer name', async 
 
 Tambahkan customer failure/settings failure, skeleton awal, response sukses services=[] (pesan empty), settings terlambat, request lama gagal setelah retry baru sukses, logout/unmount ketika request aktif. Submit disabled jika settings/services/customer belum terkonfirmasi. Error dan retry memakai `role="alert"` serta nama tombol yang spesifik.
 
-- [ ] **2. Run red:** mock Playwright test kasus load failure.
-- [ ] **3. Hilangkan catch yang mengubah kegagalan menjadi sukses dengan array kosong.**
+- [x] **2. Run red:** mock Playwright test kasus load failure.
+- [x] **3. Hilangkan catch yang mengubah kegagalan menjadi sukses dengan array kosong.**
 
 ```js
 const results = await Promise.allSettled([
@@ -304,8 +304,8 @@ const canSubmit = !loading && !settingsLoading && !settingsError && settings &&
 
 Fetcher/retry mempertahankan form; stale results diabaikan memakai counter/ref atau cleanup yang sudah ada. AppContext membersihkan settings/error saat logout/perubahan tenant dan menolak respons user lama. `settings === null` dibedakan dari sukses settings kosong. Jika daftar layanan sukses kosong, arahkan owner ke layanan; staff diberi pesan meminta owner menyediakan layanan, bukan tautan yang tidak diizinkan.
 
-- [ ] **4. Run green:** mock tests, lint; pastikan retry tidak memanggil POST transactions.
-- [ ] **5. Commit:** `fix(cashier): expose data loading failures and safe retries`.
+- [x] **4. Run green:** mock tests, lint; pastikan retry tidak memanggil POST transactions.
+- [x] **5. Commit:** `fix(cashier): expose data loading failures and safe retries`.
 
 ## Task 5: Error dashboard per panel
 
@@ -313,7 +313,7 @@ Fetcher/retry mempertahankan form; stale results diabaikan memakai counter/ref a
 
 **Interfaces:** Outcome stats/trend/topServices terpisah. Error message membaca `.message` lalu `.error`. Empty state hanya untuk respons sukses kosong. Retry panel hanya memuat endpoint panel tersebut; retry keseluruhan opsional menggunakan reloadKey yang sudah ada.
 
-- [ ] **1. Browser test chart 500 bukan empty state.**
+- [x] **1. Browser test chart 500 bukan empty state.**
 
 ```js
 test('trend error remains distinct from no revenue', async ({ page }) => {
@@ -330,8 +330,8 @@ test('trend error remains distinct from no revenue', async ({ page }) => {
 
 Tambahkan top-services error, stats error dengan pesan dari field message, sukses kosong, perubahan filter cepat dengan request lama terlambat, retry satu panel tidak mengubah metrik panel lain.
 
-- [ ] **2. Run red:** mock Playwright test trend failure.
-- [ ] **3. Simpan outcome tiap endpoint.**
+- [x] **2. Run red:** mock Playwright test trend failure.
+- [x] **3. Simpan outcome tiap endpoint.**
 
 ```js
 const apiMessage = (err, fallback) => err.response?.data?.message || err.response?.data?.error || fallback;
@@ -342,8 +342,8 @@ setTopServicesError(topRes.status === 'rejected' ? apiMessage(topRes.reason, 'Ga
 
 Render urutan loading → error+retry → sukses kosong → konten. Bila stats gagal tanpa data, jangan render angka nol sebagai angka aktual; pakai unavailable state. Bila mempertahankan data sukses lama saat refresh gagal, labeli data sebelumnya dan periode asalnya; jangan mencampur data lama dengan label filter baru. Pertahankan cleanup `cancelled`/request ID untuk perubahan filter dan retry.
 
-- [ ] **4. Run green:** mock tests; uji viewport 390×844 dan 1440×1000, keyboard retry, tidak ada pageerror.
-- [ ] **5. Commit:** `fix(dashboard): separate panel failures from empty data`.
+- [x] **4. Run green:** mock tests; uji viewport 390×844 dan 1440×1000, keyboard retry, tidak ada pageerror.
+- [x] **5. Commit:** `fix(dashboard): separate panel failures from empty data`.
 
 ## Task 6: Permission dashboard dan reports konsisten
 
@@ -354,7 +354,7 @@ Render urutan loading → error+retry → sukses kosong → konten. Bila stats g
 
 **Interfaces:** `canAccessStaffMenu(user, settings, menu): boolean`; OWNER true, STAFF minimum CASHIER/TRACKING/PROFILE, optional DASHBOARD/REPORTS/CUSTOMERS/SERVICES sesuai JSON array settings.staffAllowedMenus. Invalid JSON/type false untuk optional. `StaffMenuGate({menu, children})` menggunakan AppContext loading/error serta AuthContext user.
 
-- [ ] **1. Unit permission dan browser test URL langsung.**
+- [x] **1. Unit permission dan browser test URL langsung.**
 
 ```js
 import assert from 'node:assert/strict';
@@ -370,8 +370,8 @@ test('malformed settings do not grant optional staff menus', () => {
 
 Browser: STAFF tanpa DASHBOARD membuka URL langsung → “Akses dashboard tidak diizinkan”, tombol kembali kasir, tidak ada GET dashboard. DASHBOARD boleh/REPORTS tidak boleh → dashboard normal, tidak ada href reports pada kedua CTA. Settings 500 → retry settings, bukan denial. Setelah izin dicabut server merespons 403 → access state, tidak render metrik nol atau retry data tanpa izin. OWNER tetap lolos. Backend test DASHBOARD false/true, bukan hanya REPORTS yang saat ini tercakup.
 
-- [ ] **2. Run red:** helper permission dan mock role tests.
-- [ ] **3. Terapkan helper yang sama pada sidebar, route gate, dan CTA.**
+- [x] **2. Run red:** helper permission dan mock role tests.
+- [x] **3. Terapkan helper yang sama pada sidebar, route gate, dan CTA.**
 
 ```jsx
 <Route path="/dashboard" element={<StaffMenuGate menu="DASHBOARD"><Dashboard /></StaffMenuGate>} />
@@ -381,8 +381,8 @@ Browser: STAFF tanpa DASHBOARD membuka URL langsung → “Akses dashboard tidak
 
 Gate menunggu settings untuk optional STAFF menu; error settings menampilkan retry; denial menampilkan informasi akses, bukan skeleton abadi. Pada backend 403/code STAFF_PERMISSION_DENIED sesudah gate lolos, Dashboard menampilkan access-denied state dan memuat ulang settings tanpa mengulang fetch berputar. Jangan mengubah semua 403 menjadi logout/paywall. Middleware backend DASHBOARD tidak dilemahkan.
 
-- [ ] **4. Run green:** unit permission, Jest permission, mock matrix (owner; staff diizinkan; staff dashboard ditolak; staff reports ditolak; malformed settings).
-- [ ] **5. Commit:** `fix(staff): enforce dashboard access in routes and navigation`.
+- [x] **4. Run green:** unit permission, Jest permission, mock matrix (owner; staff diizinkan; staff dashboard ditolak; staff reports ditolak; malformed settings).
+- [x] **5. Commit:** `fix(staff): enforce dashboard access in routes and navigation`.
 
 ## Task 7: Rentang tujuh hari dan tanggal frontend tetap WIB
 
@@ -394,7 +394,7 @@ Gate menunggu settings untuk optional STAFF menu; error settings menampilkan ret
 - `getTrendRange({startDate,endDate}): {startDate,endDate}` minimum tujuh hari WIB; menggantikan helper lokal Dashboard.
 - Export `BUSINESS_TZ_OFFSET = 420` untuk request revenue trend.
 
-- [ ] **1. Unit test boundary tetap, bukan bergantung jam test.**
+- [x] **1. Unit test boundary tetap, bukan bergantung jam test.**
 
 ```js
 import assert from 'node:assert/strict';
@@ -414,8 +414,8 @@ test('custom dates represent WIB rather than host local time', () => {
 
 Tambahkan hari ini/kemarin/bulan ini, 31 Des → 1 Jan, 29 Feb 2028, custom parsial/terbalik/tanggal tak valid, tren minimum tujuh hari. Jalankan test dengan TZ=UTC, Asia/Jakarta, America/Los_Angeles; hasil harus identik.
 
-- [ ] **2. Run red:** `env TZ=UTC node --test frontend/scripts/dateRange.test.mjs`.
-- [ ] **3. Implementasi memakai UTC getters dan offset tetap; jangan gunakan setHours lokal.**
+- [x] **2. Run red:** `env TZ=UTC node --test frontend/scripts/dateRange.test.mjs`.
+- [x] **3. Implementasi memakai UTC getters dan offset tetap; jangan gunakan setHours lokal.**
 
 ```js
 export const BUSINESS_TZ_OFFSET = 420;
@@ -432,8 +432,8 @@ const todayStart = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCD
 
 Custom incomplete/invalid jangan disulap ke hari ini atau seluruh waktu. Validasi sebelum destructuring pada fetch Dashboard/Reports dan pada export PDF/Excel Reports. DateFilter menampilkan error tanggal dan label input start/end; export disabled pada range invalid. Dashboard mengirim tzOffset=420 dan memakai helper trend baru. Label timestamp/dashboard memakai timeZone Asia/Jakarta; jangan menambahkan teks WIB pada hasil format timezone browser.
 
-- [ ] **4. Run green ketiga timezone; browser capture query hari ini/tujuh hari/custom; smoke Reports fetch dan export boundary tanpa mengubah format ekspor.**
-- [ ] **5. Commit:** `fix(dashboard): use seven-day WIB date ranges consistently`.
+- [x] **4. Run green ketiga timezone; browser capture query hari ini/tujuh hari/custom; smoke Reports fetch dan export boundary tanpa mengubah format ekspor.**
+- [x] **5. Commit:** `fix(dashboard): use seven-day WIB date ranges consistently`.
 
 ## Task 8: todayOrders memakai batas hari WIB pada server
 
@@ -441,7 +441,7 @@ Custom incomplete/invalid jangan disulap ke hari ini atau seluruh waktu. Validas
 
 **Interfaces:** `getWibDayBounds(now = new Date()): {start: Date,end: Date}`; eksport CommonJS. Endpoint stats dan response keys tetap sama. Date filter metrik mengikuti startDate/endDate request; todayOrders selalu hari ini WIB, tidak mengikuti custom periode.
 
-- [ ] **1. Test batas hari dan test query controller dengan frozen clock.**
+- [x] **1. Test batas hari dan test query controller dengan frozen clock.**
 
 ```js
 const { getWibDayBounds } = require('../../src/utils/businessDate');
@@ -455,8 +455,8 @@ test('WIB midnight is 17:00 UTC on the preceding date', () => {
 
 Di suite dashboard yang sudah memock Prisma: `jest.useFakeTimers().setSystemTime(new Date('2026-10-10T17:30:00Z'))`, panggil stats, assert findMany.where.startDate identik dengan helper dan businessId benar; afterEach `jest.useRealTimers()`. Tambahkan waktu 16:59:59.999Z/17:00Z, batas bulan/tahun. Test saat filter kemarin tetap menanyakan todayOrders hari ini.
 
-- [ ] **2. Run red:** `env TZ=UTC npm test --workspace=backend -- businessDate dashboardController`.
-- [ ] **3. Ganti startOfToday.setHours/endOfToday.setHours dengan helper.**
+- [x] **2. Run red:** `env TZ=UTC npm test --workspace=backend -- businessDate dashboardController`.
+- [x] **3. Ganti startOfToday.setHours/endOfToday.setHours dengan helper.**
 
 ```js
 const getWibDayBounds = (now = new Date()) => {
@@ -472,8 +472,8 @@ const { start: startOfToday, end: endOfToday } = getWibDayBounds(now);
 
 Pertahankan take 20, urutan desc, dan seluruh tenant filters. Tidak mengandalkan ENV TZ untuk memperbaiki bisnis. Jangan memindahkan startDate transaksi yang sudah ada.
 
-- [ ] **4. Run green UTC/Jakarta; query fixture dengan transaksi 00:15 WIB masuk hari yang benar; test query-count/tenant isolation tetap lulus.**
-- [ ] **5. Commit:** `fix(dashboard): calculate today orders in WIB on every server`.
+- [x] **4. Run green UTC/Jakarta; query fixture dengan transaksi 00:15 WIB masuk hari yang benar; test query-count/tenant isolation tetap lulus.**
+- [x] **5. Commit:** `fix(dashboard): calculate today orders in WIB on every server`.
 
 ## Task 9: Jadikan seluruh regresi bagian dari CI dan E2E STAFF
 
@@ -487,7 +487,7 @@ Pertahankan take 20, urutan desc, dan seluruh tenant filters. Tidak mengandalkan
 - Project real `staff` menggunakan `e2e/.auth/staff.json`, sudah dibuat oleh auth.setup.js; testMatch `/staff-dashboard\.spec\.js/` dan dependencies `['setup']`.
 - Mock suite memakai config terpisah, frontend saja, tanpa auth setup dan tanpa storageState owner.
 
-- [ ] **1. Buat fixture dan config mock sejak task pertama membutuhkan browser test.** Ini scaffolding test, bukan task produk terpisah. Gunakan sample Appendix A, tambahkan handlers task tanpa menghilangkan default endpoint.
+- [x] **1. Buat fixture dan config mock sejak task pertama membutuhkan browser test.** Ini scaffolding test, bukan task produk terpisah. Gunakan sample Appendix A, tambahkan handlers task tanpa menghilangkan default endpoint.
 
 ```js
 // playwright.mock.config.js
@@ -503,9 +503,9 @@ module.exports = defineConfig({
 });
 ```
 
-- [ ] **2. Koreksi E2E dashboard lama.** Assertion sekarang memakai “Pendapatan (Lunas)”, “Pelanggan Baru”, “Metode Pembayaran”, “Status Pengerjaan”. Jangan menghapus assertion gagal tanpa menggantinya dengan perilaku aktual. Tambahkan real STAFF test login menuju kasir, permission dashboard sesuai settings fixture, preview → save → Tracking nominal server. Owner matrix tetap berjalan.
-- [ ] **3. Buat fixture backend real melalui database test/API owner yang sudah authenticated.** Simpan settings semula sebelum mengubah permission dan pulihkan pada finally/afterEach. Jangan menggantungkan test deny pada seed default yang memberi izin. Gunakan service dan customer khusus test serta cleanup tenant-scoped; tidak mengirim WhatsApp nyata.
-- [ ] **4. Tambahkan gate CI setelah build frontend.**
+- [x] **2. Koreksi E2E dashboard lama.** Assertion sekarang memakai “Pendapatan (Lunas)”, “Pelanggan Baru”, “Metode Pembayaran”, “Status Pengerjaan”. Jangan menghapus assertion gagal tanpa menggantinya dengan perilaku aktual. Tambahkan real STAFF test login menuju kasir, permission dashboard sesuai settings fixture, preview → save → Tracking nominal server. Owner matrix tetap berjalan.
+- [x] **3. Buat fixture backend real melalui database test/API owner yang sudah authenticated.** Simpan settings semula sebelum mengubah permission dan pulihkan pada finally/afterEach. Jangan menggantungkan test deny pada seed default yang memberi izin. Gunakan service dan customer khusus test serta cleanup tenant-scoped; tidak mengirim WhatsApp nyata.
+- [x] **4. Tambahkan gate CI setelah build frontend.**
 
 ```yaml
 - name: Frontend helper and SEO tests
@@ -516,7 +516,7 @@ module.exports = defineConfig({
 
 Mock Playwright dijalankan di job yang memasang Chromium (job e2e yang ada), bukan job frontend tanpa browser. Di job frontend, ganti step SEO lama dengan step helper+SEO sesudah build karena scripts/*.test.mjs mencakup test artefak SEO; jangan menjalankan test SEO dua kali. Pertahankan test:seo sebagai script kompatibilitas. Job real E2E menjalankan semua project termasuk staff baru.
 
-- [ ] **5. Jalankan gate akhir sekali sesudah semua perubahan terkait selesai.**
+- [x] **5. Jalankan gate akhir sekali sesudah semua perubahan terkait selesai.**
 
 ```bash
 npm test --workspace=backend
@@ -533,8 +533,8 @@ npx playwright test --project=owner --project=staff
 
 Untuk real E2E, DATABASE_URL wajib database test terisolasi yang sudah dimigrasi dan di-seed. Jalankan unit/integration MySQL dengan flag yang sudah ada hanya di database tersebut. Browser lokal yang belum memiliki executable Playwright perlu instalasi Chromium saat eksekusi; laporkan blocker tanpa mengklaim test dijalankan. Periksa mobile 390×844, desktop 1440×1000, keyboard, tidak ada crash, form input terjaga setelah retry.
 
-- [ ] **6. Dokumentasikan bukti per F1–F8**, command, hasil, dan test yang belum bisa dijalankan. Jangan menyatakan real E2E lulus berdasarkan mock saja.
-- [ ] **7. Commit:** `test(staff): cover cashier and dashboard regression flows`.
+- [x] **6. Dokumentasikan bukti per F1–F8**, command, hasil, dan test yang belum bisa dijalankan. Jangan menyatakan real E2E lulus berdasarkan mock saja.
+- [x] **7. Commit:** `test(staff): cover cashier and dashboard regression flows`.
 
 ## Appendix A: Fixture mock yang dapat dikembangkan oleh test pemilik
 
@@ -604,16 +604,16 @@ Setiap spec browser mengimpor `const { test, expect } = require('@playwright/tes
 
 ## Definition of Done
 
-- [ ] F1–F8 memiliki test regresi yang terbukti gagal sebelum patch dan lulus sesudahnya.
-- [ ] Nama pelanggan selalu required; settings lama false teratasi; toggle nama tidak ada.
-- [ ] Preview duplicate/rate/rounding cocok dengan server dan tidak memutasi saldo.
-- [ ] POST sukses tidak berubah menjadi gagal karena refresh/WA; retry tidak membuat transaksi baru.
-- [ ] Nota manual memakai nominal kanonis dan status BAYAR_NANTI benar; payable nol tetap nol.
-- [ ] Error pemuatan terlihat dengan retry; empty state hanya untuk respons sukses kosong.
-- [ ] Staff tanpa izin tidak fetch dashboard atau melihat CTA reports; server tetap menolak akses terlarang.
-- [ ] Rentang tujuh hari benar dan todayOrders memakai WIB terlepas timezone browser/server.
-- [ ] Lint/build/unit/SEO/mock E2E/real STAFF+OWNER E2E lulus atau keterbatasan dilaporkan secara spesifik.
-- [ ] Tidak ada dependency baru, perubahan skema, penghapusan data, atau perubahan permission data asli.
+- [x] F1–F8 memiliki test regresi yang terbukti gagal sebelum patch dan lulus sesudahnya.
+- [x] Nama pelanggan selalu required; settings lama false teratasi; toggle nama tidak ada.
+- [x] Preview duplicate/rate/rounding cocok dengan server dan tidak memutasi saldo.
+- [x] POST sukses tidak berubah menjadi gagal karena refresh/WA; retry tidak membuat transaksi baru.
+- [x] Nota manual memakai nominal kanonis dan status BAYAR_NANTI benar; payable nol tetap nol.
+- [x] Error pemuatan terlihat dengan retry; empty state hanya untuk respons sukses kosong.
+- [x] Staff tanpa izin tidak fetch dashboard atau melihat CTA reports; server tetap menolak akses terlarang.
+- [x] Rentang tujuh hari benar dan todayOrders memakai WIB terlepas timezone browser/server.
+- [x] Lint/build/unit/SEO/mock E2E/real STAFF+OWNER E2E lulus atau keterbatasan dilaporkan secara spesifik.
+- [x] Tidak ada dependency baru, perubahan skema, penghapusan data, atau perubahan permission data asli.
 
 ## Self-review plan
 
@@ -623,3 +623,58 @@ Setiap spec browser mengimpor `const { test, expect } = require('@playwright/tes
 - Review Focus diliput oleh Task 1–8; Task 9 memasukkan bukti ke CI.
 - Scope: penutupan audit beserta regresi yang langsung terkait; pencarian pelanggan melewati 100 data, desain ulang total, pengubahan template WA otomatis milik user, dan distributed queue tidak termasuk.
 - Risiko implementasi: perubahan shared dateRange juga menyentuh Reports; settings lama false harus dinormalisasi; mock E2E tidak menggantikan test dengan database/otorisasi nyata.
+
+
+## Bukti implementasi
+
+| Temuan | Bukti regresi | Hasil akhir |
+|---|---|---|
+| F1 | cashierPreview unit; duplicate-service mock; real STAFF POST → Tracking | 11 helper tests; preview cover Rp80.000/payable Rp16.000 cocok dengan POST 201 |
+| F2 | transactionNamePolicy; legacy-settings browser | 6 backend cases; nama tetap required saat setting lama false |
+| F3 | saved transaction + refresh500; retry; in-flight double-submit; quota409 | Status tersimpan terjaga; retry tidak mengulang POST; konflik mempertahankan draft |
+| F4 | cashierReceipt; zero-payable/manual WA; queued/failed; BAYAR_NANTI | 7 helper cases; nominal server dan status pembayaran/WA terpisah |
+| F5 | services/customers/settings500; trend/top500 scoped retry | Error berbeda dari empty state; input/panel sukses tetap terjaga |
+| F6 | staffAccess; middleware; direct URL/malformed/revoked; real API403 | Permission DASHBOARD/REPORTS independen; route/sidebar/CTA selaras |
+| F7 | dateRange; browser query and Reports exports UTC/Los Angeles | 5 helper cases per timezone; 4 browser cases; tujuh hari dan custom boundaries WIB |
+| F8 | businessDate + frozen dashboard clock | 12 backend date/controller cases di UTC; 00:15 WIB masuk hari yang benar |
+
+Command dan hasil verifikasi lokal:
+
+- `env DATABASE_URL=<isolated-washpro_test> WASHPRO_QUERY_DB_TESTS=1 npm test --workspace=backend`: **116 passed**, termasuk 4 integrasi MySQL.
+- `npm run lint --workspace=frontend -- --max-warnings=0`: **exit 0**.
+- `npm run build --workspace=frontend`: **exit 0**, client/SSR/prerender tersedia.
+- `npm run test:unit --workspace=frontend`: **31 passed**, helper dan SEO.
+- `env TZ=<UTC|America/Los_Angeles|Asia/Jakarta> node --test frontend/scripts/dateRange.test.mjs`: **5 passed per timezone**.
+- `env TZ=UTC npm test --workspace=backend -- businessDate dashboardController`: **12 passed**.
+- `npm exec -- playwright test --config=playwright.mock.config.js`: **28 passed**.
+- `env DATABASE_URL=<isolated-washpro_test> npm exec -- playwright test --project=owner --project=staff`: **35 passed** (3 setup + 28 owner + 4 staff), Chrome lokal.
+- `git -c core.whitespace=cr-at-eol diff --check`: **exit 0**.
+
+Tes database menggunakan container MySQL baru pada port3307, migration+seed, dan gateway WhatsApp nonaktif. Tidak ada perubahan schema/dependency; tidak ada tes menulis database bisnis asli. Pipeline CI sudah memuat gate ini; eksekusi GitHub Actions memerlukan push/PR dan belum dijalankan dari sesi lokal.
+
+
+## Review akhir dan keputusan eksekusi
+
+Review read-only baru memeriksa seluruh perubahan. Empat temuan Important dan satu selisih rounding Rp1 ditangani dalam satu pass dengan regresi RED→GREEN:
+
+- Error stats kini mempertahankan tren/layanan terlaris yang berhasil; retry stats tidak fetch ulang panel lain.
+- Staff REPORTS tanpa DASHBOARD memakai summary dari endpoint `/reports/charts` berizin REPORTS, bukan melonggarkan otorisasi dashboard. Summary memakai transaksi non-cancelled dan pendapatan CASH/QRIS.
+- Tanggal tampilan laporan, periode PDF/Excel, nama file Excel, dan pengelompokan harian backend memakai WIB. Browser tests memeriksa isi file ekspor, bukan hanya query.
+- Estimasi kasir memakai durasi jam dalam milliseconds dan format WIB, termasuk tanggal heading nota.
+- Preview memakai ratio-first persis urutan backend untuk coverage pecahan.
+
+Keputusan yang dibuat selama eksekusi:
+
+| Keputusan | Alasan | Biaya/risiko jika keliru |
+|---|---|---|
+| Tetap di branch fitur dan workspace yang sudah aktif | User menyetujui plan di checkout bersama; status diperiksa sebelum edit | Edit paralel user dapat konflik |
+| Gabungkan commit Task2–4 dan Task5–8 | Loader kasir dan rendering/tanggal dashboard saling berbagi perubahan | Cherry-pick kurang granular |
+| Counter SQL integrasi memakai trimStart | Raw SELECT Prisma dimulai newline, sehingga test lama menghitung1 dari2 SELECT | Parser counter tetap hanya mengenali query berawal SELECT |
+| Rounding Rp1 diperlakukan Important dan diperbaiki | Kesamaan nominal dengan backend adalah acceptance criterion F1 | Tambahan patch/test kecil |
+| Lookup pelanggan di luar100 pertama tetap di luar scope | Dikecualikan secara eksplisit oleh plan | Preview kandidat di daftar besar dapat tetap terlewat |
+| Logika nominal ekspor Reports lama tetap di luar scope nota kasir | Patch nominal berfokus pada receipt kasir yang disimpan | PDF row full coverage lama dapat masih fallback ke gross; membutuhkan audit akuntansi laporan terpisah |
+| Redesign race/error-state Reports umum tetap di luar scope | Pre-existing; hanya dependency izin dan kalender bersama diubah | Respons/error laporan lama dapat tetap menampilkan data usang |
+
+Tidak ada minor review yang ditunda: selisih rounding telah diperbaiki. Tiga area di luar scope di atas dicatat terpisah dari delapan temuan kasir/dashboard yang ditutup.
+
+Hasil gate akhir sesudah perbaikan review: backend116/116, frontend helper+SEO31/31, mock28/28, realOWNER/STAFF35/35; lint/build/diff-check exit0. Tidak ada temuan Critical/Important yang tersisa dari review. Tidak ada re-review tambahan; fix dibuktikan dengan regresi dan suite sesuai workflow.

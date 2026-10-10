@@ -67,7 +67,7 @@ const { consumeQuotaAndLog, restoreQuotaAndCleanupLogs } = require('../../src/se
     const result = await prisma.$transaction((tx) => resolveTransactionServices(tx, fixture.business.id, items));
     expect(result).toHaveLength(100);
     expect(result.every(({ service }) => service.id === fixture.services[0].id)).toBe(true);
-    expect(queries.filter((query) => /^SELECT\b/i.test(query))).toHaveLength(1);
+    expect(queries.filter((query) => /^SELECT\b/i.test(query.trimStart()))).toHaveLength(1);
   });
 
   it('preserves name collation, literal quotes, ID precedence and tenant isolation', async () => {
@@ -78,7 +78,7 @@ const { consumeQuotaAndLog, restoreQuotaAndCleanupLogs } = require('../../src/se
       { serviceId: cafe.id.toUpperCase(), serviceName: quoted.name, qty: 1 },
     ]));
     expect(result.map(({ service }) => service.id)).toEqual([cafe.id, quoted.id, cafe.id]);
-    expect(queries.filter((query) => /^SELECT\b/i.test(query))).toHaveLength(2);
+    expect(queries.filter((query) => /^SELECT\b/i.test(query.trimStart()))).toHaveLength(2);
     await expect(prisma.$transaction((tx) => resolveTransactionServices(tx, fixture.business.id, [
       { serviceId: fixture.foreignService.id, serviceName: fixture.foreignService.name, qty: 1 },
     ]))).rejects.toMatchObject({ statusCode: 404, code: 'SERVICE_NOT_FOUND' });

@@ -106,7 +106,7 @@ washpro/
 |--------|-----------|
 | `POST /api/auth/register` | Registrasi bisnis baru (trial 7 hari) |
 | `POST /api/auth/login` | Login tenant |
-| `GET /api/dashboard/stats` | Statistik dashboard (OWNER only) |
+| `GET /api/dashboard/stats` | Statistik dashboard (OWNER / STAFF dengan izin DASHBOARD) |
 | `GET /api/transactions` | Daftar transaksi |
 | `POST /api/transactions` | Buat transaksi baru |
 | `GET /api/customers` | Daftar pelanggan |
@@ -134,8 +134,29 @@ Setiap push/PR menjalankan:
 
 1. `prisma migrate deploy` + seed + unit/integration test (MySQL terisolasi)
 2. Migration upgrade check (schema pre-hardening → hardening migrations)
-3. Frontend lint (`--max-warnings=0`) + production build + tes artefak SEO
-4. Playwright E2E (Chromium, `GOWA_ENABLED=false`, database test terpisah)
+3. Frontend lint (`--max-warnings=0`) + production build + tes helper dan artefak SEO
+4. Playwright E2E OWNER/STAFF dan regresi mock (Chromium, `GOWA_ENABLED=false`, database test terpisah)
+
+### Tes Kasir dan Dashboard Staff
+
+Nama pelanggan selalu wajib; pengaturan lama yang menyembunyikan nama dinormalisasi.
+Preview menggabungkan layanan yang sama sebelum menghitung kuota. Nota memakai
+nominal respons server, dan kegagalan refresh/WhatsApp tidak membatalkan transaksi
+yang sudah tersimpan. Akses DASHBOARD dan REPORTS diperiksa terpisah. Kalender
+dashboard dan laporan memakai WIB; tujuh hari berarti hari ini dan enam hari sebelumnya.
+
+```bash
+npm run build --workspace=frontend
+npm run test:unit --workspace=frontend
+npx playwright test --config=playwright.mock.config.js
+# DATABASE_URL harus menunjuk MySQL test yang telah dimigrasi dan di-seed.
+npx playwright test --project=owner --project=staff
+```
+
+Regresi mock memeriksa error/retry, kuota, nota, izin, serta respons terlambat tanpa
+database. E2E STAFF memeriksa login, penolakan API, dan preview → simpan → Tracking
+dengan MySQL asli; fixture hanya boleh berjalan pada `washpro_test`/`washpro_ci`
+di localhost dan membersihkan data test serta memulihkan settings.
 
 ### Tes Optimasi Query
 

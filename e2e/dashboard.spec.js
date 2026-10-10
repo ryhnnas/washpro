@@ -16,10 +16,10 @@ test.describe('Dashboard', () => {
 
   test('should display dashboard with stat cards', async ({ page }) => {
     // "Pendapatan" muncul di stat card label DAN heading "Tren Pendapatan" → pakai exact
-    await expect(page.getByText('Pendapatan', { exact: true })).toBeVisible();
+    await expect(page.getByText('Pendapatan (Lunas)', { exact: true })).toBeVisible();
     await expect(page.getByText('Transaksi', { exact: true })).toBeVisible();
     await expect(page.getByText('Antrian Aktif')).toBeVisible();
-    await expect(page.getByText('Total Pelanggan')).toBeVisible();
+    await expect(page.getByText('Pelanggan Baru', { exact: true })).toBeVisible();
   });
 
   test('should display revenue trend chart', async ({ page }) => {
@@ -27,11 +27,11 @@ test.describe('Dashboard', () => {
   });
 
   test('should display payment method breakdown', async ({ page }) => {
-    await expect(page.getByText('Cash vs QRIS')).toBeVisible();
+    await expect(page.getByText('Metode Pembayaran', { exact: true })).toBeVisible();
   });
 
   test('should display status distribution', async ({ page }) => {
-    await expect(page.getByText('Distribusi Status Pengerjaan')).toBeVisible();
+    await expect(page.getByText('Status Pengerjaan', { exact: true })).toBeVisible();
   });
 
   test('should display today orders section', async ({ page }) => {
