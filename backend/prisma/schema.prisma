@@ -65,6 +65,8 @@ model SubscriptionPayment {
   approvedById    String?       @map("approved_by_id")
   adminEmailNotifiedAt DateTime? @map("admin_email_notified_at")
   rejectionReason String?       @db.Text @map("rejection_reason")
+  rejectedAt      DateTime?     @map("rejected_at")
+  rejectedById    String?       @map("rejected_by_id")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
