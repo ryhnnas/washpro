@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import superAdminApi from '../../lib/superAdminAxios';
 
@@ -69,6 +69,10 @@ export default function SuperAdminLogin() {
                 </button>
               </div>
             </div>
+
+            <Link to="/superadmin/forgot-password" className="block text-right text-sm font-semibold text-indigo-300 hover:text-indigo-200">
+              Lupa Password?
+            </Link>
 
             {error && (
               <div className="bg-red-500/10 border border-red-400/30 rounded-xl p-3 text-red-300 text-sm" role="alert" aria-live="polite">

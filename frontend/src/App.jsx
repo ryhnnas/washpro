@@ -82,6 +82,8 @@ function App() {
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/superadmin/forgot-password" element={<ForgotPassword superAdmin />} />
+                <Route path="/superadmin/reset-password" element={<ResetPassword superAdmin />} />
 
                 <Route path="/superadmin/login" element={<SuperAdminLogin />} />
                 <Route path="/superadmin/dashboard" element={<SuperAdminRoute><SuperAdminDashboard /></SuperAdminRoute>} />

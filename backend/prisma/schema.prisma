@@ -21,8 +21,24 @@ model SuperAdmin {
   name      String
   email     String   @unique
   password  String
+  sessionVersion Int @default(0) @map("session_version")
+  passwordResetOtps SuperAdminPasswordResetOtp[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model SuperAdminPasswordResetOtp {
+  id           String    @id @default(uuid())
+  superAdminId String    @map("super_admin_id")
+  otp          String
+  expiresAt    DateTime  @map("expires_at")
+  usedAt       DateTime? @map("used_at")
+  attempts     Int       @default(0)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  superAdmin SuperAdmin @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+
+  @@index([superAdminId, expiresAt])
 }
 
 model SubscriptionPlan {

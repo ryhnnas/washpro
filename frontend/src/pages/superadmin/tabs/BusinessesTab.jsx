@@ -23,8 +23,8 @@ export default function BusinessesTab({
           <h1 className="text-2xl font-black text-white">Manajemen Toko</h1>
           <p className="text-slate-400">Kelola seluruh tenant WashPro{total ? ` · ${total} toko` : ''}</p>
         </div>
-        <div className="flex gap-2">
-          <div className="relative">
+        <div className="flex flex-wrap gap-2">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true" />
             <input
               type="search"
@@ -32,7 +32,7 @@ export default function BusinessesTab({
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Cari nama toko…"
               aria-label="Cari nama toko"
-              className="pl-9 pr-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400"
+              className="w-full sm:w-52 pl-9 pr-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-400"
             />
           </div>
           <select

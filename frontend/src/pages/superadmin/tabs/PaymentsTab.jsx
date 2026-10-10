@@ -17,12 +17,12 @@ export default function PaymentsTab({
 }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-black text-white">Verifikasi Pembayaran</h1>
           <p className="text-slate-400">Periksa dan konfirmasi bukti transfer QRIS</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {['PENDING', 'APPROVED', 'REJECTED'].map((s) => (
             <button
               key={s}

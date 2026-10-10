@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Store, CreditCard, Package, LogOut,
-  CheckCircle, XCircle, MessageSquare,
+  CheckCircle, XCircle, MessageSquare, Menu, X, ChevronRight,
 } from 'lucide-react';
 import { NAV_ITEMS } from './constants';
 import { superAdminService } from './services/superAdminService';
@@ -14,6 +14,7 @@ import PaymentsTab from './tabs/PaymentsTab';
 import BusinessesTab from './tabs/BusinessesTab';
 import PlansTab from './tabs/PlansTab';
 import WhatsAppTab from './tabs/WhatsAppTab';
+import './superadmin.css';
 
 const TAB_ICONS = {
   dashboard: LayoutDashboard,
@@ -31,6 +32,10 @@ export default function SuperAdminDashboard() {
   const [tab, setTab] = useState('dashboard');
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState('');
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsUpdatedAt, setStatsUpdatedAt] = useState(null);
+  const statsRequestId = useRef(0);
+  const navigationDialog = useRef(null);
   const [businesses, setBusinesses] = useState([]);
   const [businessQuery, setBusinessQuery] = useState({ page: 1, search: '', status: '' });
   const [businessTotal, setBusinessTotal] = useState(0);
@@ -57,12 +62,18 @@ export default function SuperAdminDashboard() {
   };
 
   const fetchStats = useCallback(async () => {
+    const requestId = ++statsRequestId.current;
+    setStatsLoading(true);
     try {
       const r = await superAdminService.getStats();
+      if (requestId !== statsRequestId.current) return;
       setStats(r.data);
+      setStatsUpdatedAt(Date.now());
       setStatsError('');
     } catch (err) {
-      setStatsError(apiMessage(err, 'Gagal memuat statistik platform.'));
+      if (requestId === statsRequestId.current) setStatsError(apiMessage(err, 'Gagal memuat statistik platform.'));
+    } finally {
+      if (requestId === statsRequestId.current) setStatsLoading(false);
     }
   }, []);
 
@@ -128,8 +139,7 @@ export default function SuperAdminDashboard() {
     superAdminService.getSession()
       .then((r) => setAdmin(r.data.admin))
       .catch(() => navigate('/superadmin/login'));
-    fetchStats();
-  }, [fetchStats, navigate]);
+  }, [navigate]);
 
   useEffect(() => { if (tab === 'dashboard') fetchStats(); }, [tab, fetchStats]);
   useEffect(() => { if (tab === 'businesses') fetchBusinesses(); }, [tab, fetchBusinesses]);
@@ -137,6 +147,7 @@ export default function SuperAdminDashboard() {
   useEffect(() => { if (tab === 'plans') fetchPlans(); }, [tab, fetchPlans]);
 
   const changeTab = (id) => {
+    navigationDialog.current?.close();
     if (id !== tab) {
       // Discard in-flight list requests from the previous tab.
       listRequestId.current += 1;
@@ -233,47 +244,46 @@ export default function SuperAdminDashboard() {
     navigate('/superadmin/login');
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950 flex">
-      <aside className="w-56 bg-slate-900 border-r border-white/5 flex flex-col py-6 flex-shrink-0" aria-label="Navigasi Super Admin">
-        <div className="px-5 mb-8 flex items-center gap-3">
-          <img src="/logo.png" alt="WashPro Logo" className="w-8 h-8 object-contain" width="32" height="32" />
-          <div>
-            <p className="text-white font-black text-lg leading-tight">WashPro</p>
-            <p className="text-indigo-400 text-xs font-semibold">Super Admin</p>
-          </div>
-        </div>
-        <nav className="flex-1 px-3 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const ItemIcon = TAB_ICONS[item.id];
-            const badge = item.id === 'payments' ? stats?.pendingPayments : 0;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => changeTab(item.id)}
-                aria-current={tab === item.id ? 'page' : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === item.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-              >
-                <ItemIcon size={18} aria-hidden="true" />
-                <span>{item.label}</span>
-                {badge > 0 && <span className="ml-auto bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">{badge}</span>}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="px-3 mt-4">
-          <div className="px-3 py-2 mb-3">
-            <p className="text-white text-sm font-semibold">{admin?.name || 'Super Admin'}</p>
-            <p className="text-slate-500 text-xs">{admin?.email}</p>
-          </div>
-          <button type="button" onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors">
-            <LogOut size={16} aria-hidden="true" /> Keluar
-          </button>
-        </div>
-      </aside>
+  const sidebar = (mobile = false) => <>
+    <div className="sa-brand">
+      <img src="/logo.png" alt="WashPro Logo" width="36" height="36" />
+      <div><p>WashPro<span>ADMIN CONSOLE</span></p></div>
+      {mobile && <button type="button" className="sa-icon-button sa-close-navigation" onClick={() => navigationDialog.current.close()} aria-label="Tutup navigasi"><X size={19} aria-hidden="true" /></button>}
+    </div>
+    <p className="sa-navigation-label">WORKSPACE</p>
+    <nav className="sa-navigation" aria-label="Menu platform">
+      {NAV_ITEMS.map(item => {
+        const Icon = TAB_ICONS[item.id];
+        const badge = item.id === 'payments' ? stats?.pendingPayments : 0;
+        return <button key={item.id} type="button" onClick={() => changeTab(item.id)} aria-current={tab === item.id ? 'page' : undefined}
+          className={'sa-nav-item' + (tab === item.id ? ' sa-nav-item--active' : '')}>
+          <Icon size={18} aria-hidden="true" /><span>{item.label}</span>{badge > 0 && <span className="sa-nav-badge">{badge}</span>}
+        </button>;
+      })}
+    </nav>
+    <div className="sa-sidebar-account">
+      <div className="sa-account-profile"><div className="sa-account-avatar" aria-hidden="true">{(admin?.name || 'Super Admin').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()}</div>
+        <div><p>{admin?.name || 'Super Admin'}</p><span>{admin?.email}</span></div>
+      </div>
+      <button type="button" onClick={handleLogout} className="sa-logout"><LogOut size={16} aria-hidden="true" />Keluar</button>
+    </div>
+  </>;
 
-      <main className="flex-1 overflow-y-auto">
+  return (
+    <div className="superadmin-shell">
+      <aside className="sa-desktop-sidebar" aria-label="Navigasi Super Admin">{sidebar()}</aside>
+      <dialog ref={navigationDialog} className="sa-mobile-nav" aria-label="Navigasi Super Admin" onClick={event => { if (event.target === event.currentTarget) navigationDialog.current.close(); }}>
+        <div className="sa-mobile-nav-content">{sidebar(true)}</div>
+      </dialog>
+
+      <main className="sa-main" id="superadmin-content">
+        <header className="sa-topbar">
+          <div className="sa-topbar-location">
+            <button type="button" className="sa-icon-button sa-mobile-menu-button" onClick={() => navigationDialog.current.showModal()} aria-label="Buka navigasi" aria-haspopup="dialog"><Menu size={20} aria-hidden="true" /></button>
+            <span className="sa-topbar-brand">Platform</span><ChevronRight size={13} className="sa-muted" aria-hidden="true" /><span>{NAV_ITEMS.find(item => item.id === tab)?.label}</span>
+          </div>
+          <div className="sa-topbar-role"><span className="sa-role-dot" />Super Admin</div>
+        </header>
         {toast && (
           <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-xl text-white font-semibold text-sm flex items-center gap-2 ${toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'}`} role="status" aria-live="polite">
             {toast.type === 'error' ? <XCircle size={16} aria-hidden="true" /> : <CheckCircle size={16} aria-hidden="true" />}
@@ -300,9 +310,9 @@ export default function SuperAdminDashboard() {
           onClose={() => setPlanModal(null)}
         />
 
-        <div className="p-8">
+        <div className="sa-content">
           {tab === 'dashboard' && (
-            <DashboardTab stats={stats} error={statsError} onRetry={fetchStats} onNavigate={changeTab} />
+            <DashboardTab stats={stats} error={statsError} loading={statsLoading} updatedAt={statsUpdatedAt} onRetry={fetchStats} onNavigate={(id) => { if (id === 'payments') changePaymentFilter('PENDING'); changeTab(id); }} />
           )}
           {tab === 'payments' && (
             <PaymentsTab

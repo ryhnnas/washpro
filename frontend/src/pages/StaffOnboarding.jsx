@@ -161,8 +161,9 @@ export default function StaffOnboarding() {
             <div className="rounded-2xl border border-slate-200 p-5">
               <div className="flex items-center gap-2 mb-3">
                 <ShieldCheck size={18} className="text-primary" />
-                <p className="font-black text-primary">Ganti Password</p>
+                <p className="font-black text-primary">Keamanan Password</p>
               </div>
+              {needsPasswordChange ? <>
               <input
                 type="password"
                 value={currentPassword}
@@ -193,6 +194,7 @@ export default function StaffOnboarding() {
               >
                 {loading ? 'Memproses...' : 'Simpan Password Baru'}
               </button>
+              </> : <p className="text-sm font-medium text-slate-600">Kata sandi sudah diperbarui.</p>}
             </div>
 
             <div className="rounded-2xl border border-slate-200 p-5">

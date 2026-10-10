@@ -38,7 +38,7 @@ const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: admin.id, role: 'SUPERADMIN' },
+      { id: admin.id, role: 'SUPERADMIN', sessionVersion: admin.sessionVersion ?? 0 },
       secret,
       { expiresIn: '8h' }
     );
