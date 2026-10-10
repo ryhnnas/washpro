@@ -1,7 +1,7 @@
 const prisma = require('../../src/config/prisma');
 const { invalidateSubscriptionCache } = require('../../src/middleware/checkSubscription');
 const {
-  toggleBusiness, deleteBusiness, rejectPayment, getBusinesses, getPayments,
+  toggleBusiness, deleteBusiness, rejectPayment, getBusinesses, getPayments, getDashboardStats,
 } = require('../../src/controllers/superAdminController');
 
 jest.mock('../../src/config/prisma', () => ({
@@ -13,6 +13,10 @@ jest.mock('../../src/services/whatsappService', () => ({ sendMessage: jest.fn().
 jest.mock('../../src/services/emailService', () => ({ sendEmail: jest.fn().mockResolvedValue({ ok: true }) }));
 jest.mock('../../src/middleware/checkSubscription', () => ({ invalidateSubscriptionCache: jest.fn() }));
 jest.mock('../../src/middleware/csrf', () => ({ generateCsrfToken: jest.fn(), setCsrfCookie: jest.fn() }));
+jest.mock('../../src/services/superAdminStatsService', () => ({
+  buildPlatformStats: jest.fn(),
+}));
+const { buildPlatformStats } = require('../../src/services/superAdminStatsService');
 
 const makeRes = () => ({ json: jest.fn(), status: jest.fn().mockReturnThis() });
 const DAY = 24 * 60 * 60 * 1000;
@@ -162,5 +166,22 @@ describe('list endpoints', () => {
     const res = makeRes();
     await getPayments({ query: { status: 'NOPE' } }, res);
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('getDashboardStats', () => {
+  it('delegates to buildPlatformStats and returns its result', async () => {
+    buildPlatformStats.mockResolvedValue({ totalBusinesses: 17, monthlyRevenue: 150000 });
+    const res = makeRes();
+    await getDashboardStats({}, res);
+    expect(buildPlatformStats).toHaveBeenCalledWith(prisma);
+    expect(res.json).toHaveBeenCalledWith({ totalBusinesses: 17, monthlyRevenue: 150000 });
+  });
+
+  it('answers 500 when the service fails', async () => {
+    buildPlatformStats.mockRejectedValue(new Error('db down'));
+    const res = makeRes();
+    await getDashboardStats({}, res);
+    expect(res.status).toHaveBeenCalledWith(500);
   });
 });

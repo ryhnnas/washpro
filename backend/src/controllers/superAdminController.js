@@ -7,6 +7,7 @@ const { invalidateSubscriptionCache } = require('../middleware/checkSubscription
 const { sendError } = require('../utils/errorResponse');
 const { generateCsrfToken, setCsrfCookie } = require('../middleware/csrf');
 const { resolveReactivationStatus } = require('../services/businessLifecycleService');
+const { buildPlatformStats } = require('../services/superAdminStatsService');
 
 const REACTIVATION_LABEL = { ACTIVE: 'Aktif', TRIAL: 'Trial', EXPIRED: 'Kadaluarsa' };
 
@@ -66,30 +67,7 @@ const login = async (req, res) => {
 // ==================== DASHBOARD STATS ====================
 const getDashboardStats = async (req, res) => {
   try {
-    const [totalBusinesses, activeBusinesses, trialBusinesses, pendingPayments] = await Promise.all([
-      prisma.business.count(),
-      prisma.business.count({ where: { subscriptionStatus: 'ACTIVE' } }),
-      prisma.business.count({ where: { subscriptionStatus: 'TRIAL' } }),
-      prisma.subscriptionPayment.count({ where: { status: 'PENDING' } }),
-    ]);
-
-    // Hitung pendapatan bulan ini dari pembayaran APPROVED
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-
-    const monthlyRevenue = await prisma.subscriptionPayment.aggregate({
-      where: { status: 'APPROVED', approvedAt: { gte: startOfMonth } },
-      _sum: { amount: true },
-    });
-
-    res.json({
-      totalBusinesses,
-      activeBusinesses,
-      trialBusinesses,
-      pendingPayments,
-      monthlyRevenue: monthlyRevenue._sum.amount || 0,
-    });
+    res.json(await buildPlatformStats(prisma));
   } catch (err) {
     sendError(res, err, 500);
   }
