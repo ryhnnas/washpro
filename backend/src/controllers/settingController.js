@@ -112,6 +112,7 @@ const getSettings = async (req, res) => {
 
     res.json({
       ...setting,
+      requireCustomerName: true,
       businessName: business.name,
       businessAddress: business.address,
       businessPhone: business.phone,
@@ -147,7 +148,6 @@ const updateSettings = async (req, res) => {
     businessName,
     businessAddress,
     businessPhone,
-    requireCustomerName,
     requireCustomerPhone,
     requireCustomerAddress,
     staffAllowedMenus, // Array format from frontend
@@ -161,7 +161,7 @@ const updateSettings = async (req, res) => {
 
     const menus = Array.isArray(staffAllowedMenus) ? staffAllowedMenus : [];
     const settingData = {
-      requireCustomerName,
+      requireCustomerName: true,
       requireCustomerPhone,
       requireCustomerAddress,
       allowStaffDashboard: menus.includes('DASHBOARD'),
@@ -267,7 +267,7 @@ const getPublicSettings = async (req, res) => {
 
     res.json({
       businessName: business.name,
-      requireCustomerName: setting.requireCustomerName,
+      requireCustomerName: true,
       requireCustomerPhone: setting.requireCustomerPhone,
       requireCustomerAddress: setting.requireCustomerAddress,
       staffAllowedMenus: JSON.stringify(menus),

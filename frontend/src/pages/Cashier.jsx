@@ -158,6 +158,10 @@ export default function Cashier() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.customerName.trim()) {
+      setFeedback({ type: 'error', message: 'Nama pelanggan wajib diisi.' });
+      return;
+    }
     if (!selectedItems.length || totalPrice <= 0) {
       setFeedback({ type: 'error', message: 'Tambah minimal 1 layanan dengan jumlah valid.' });
       return;
@@ -167,7 +171,7 @@ export default function Cashier() {
     setShowManualWA(false);
     try {
       const payload = {
-        customerName: formData.customerName,
+        customerName: formData.customerName.trim(),
         customerPhone: formData.customerPhone,
         customerAddress: formData.customerAddress,
         paymentMethod: formData.paymentMethod,
@@ -304,10 +308,11 @@ export default function Cashier() {
              </div>
              
              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-5">
-               {settings?.requireCustomerName !== false && (
+               {(
                  <div className="relative" ref={suggestionRef}>
-                   <label className="block text-sm font-bold text-slate-500 mb-2 ml-1">Nama Lengkap (Ketik untuk mencari)</label>
+                   <label htmlFor="cashier-customer-name" className="block text-sm font-bold text-slate-500 mb-2 ml-1">Nama Lengkap (Ketik untuk mencari)</label>
                    <input 
+                     id="cashier-customer-name"
                      placeholder="Hafiz Reyhan" 
                      required 
                      className="premium-input bg-secondary p-2 sm:p-3" 

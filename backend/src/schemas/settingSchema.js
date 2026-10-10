@@ -4,7 +4,7 @@ const updateSettingSchema = z.object({
   businessName: z.string().min(1, "Nama bisnis wajib diisi").optional().nullable(),
   businessAddress: z.string().optional().nullable(),
   businessPhone: z.string().optional().nullable(),
-  requireCustomerName: z.boolean().optional(),
+  requireCustomerName: z.literal(true, { error: 'Nama pelanggan selalu wajib diisi' }).optional(),
   requireCustomerPhone: z.boolean().optional(),
   requireCustomerAddress: z.boolean().optional(),
   staffAllowedMenus: z.array(z.string()).optional(),
