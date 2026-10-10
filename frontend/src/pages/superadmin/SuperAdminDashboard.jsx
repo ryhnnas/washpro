@@ -23,16 +23,25 @@ const TAB_ICONS = {
   whatsapp: MessageSquare,
 };
 
+const PAGE_SIZE = 20;
+const apiMessage = (err, fallback) => err.response?.data?.message || err.response?.data?.error || fallback;
+
 export default function SuperAdminDashboard() {
   const [tab, setTab] = useState('dashboard');
   const [stats, setStats] = useState(null);
+  const [statsError, setStatsError] = useState('');
   const [businesses, setBusinesses] = useState([]);
+  const [businessQuery, setBusinessQuery] = useState({ page: 1, search: '', status: '' });
+  const [businessTotal, setBusinessTotal] = useState(0);
   const [payments, setPayments] = useState([]);
   const [paymentFilter, setPaymentFilter] = useState('PENDING');
+  const [paymentPage, setPaymentPage] = useState(1);
+  const [paymentTotal, setPaymentTotal] = useState(0);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [listError, setListError] = useState('');
   const [proofModal, setProofModal] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
-  const [plans, setPlans] = useState([]);
   const [planModal, setPlanModal] = useState(null);
   const [toast, setToast] = useState(null);
   const [admin, setAdmin] = useState(null);
@@ -49,42 +58,53 @@ export default function SuperAdminDashboard() {
     try {
       const r = await superAdminService.getStats();
       setStats(r.data);
-    } catch {
-      /* ignore */
+      setStatsError('');
+    } catch (err) {
+      setStatsError(apiMessage(err, 'Gagal memuat statistik platform.'));
     }
   }, []);
 
   const fetchBusinesses = useCallback(async () => {
     setLoading(true);
+    setListError('');
     try {
-      const r = await superAdminService.getBusinesses();
+      const params = { page: businessQuery.page, limit: PAGE_SIZE };
+      if (businessQuery.search) params.search = businessQuery.search;
+      if (businessQuery.status) params.status = businessQuery.status;
+      const r = await superAdminService.getBusinesses(params);
       setBusinesses(r.data.businesses || []);
-    } catch {
-      /* ignore */
+      setBusinessTotal(r.data.total || 0);
+    } catch (err) {
+      setBusinesses([]);
+      setListError(apiMessage(err, 'Gagal memuat daftar toko.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [businessQuery]);
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
+    setListError('');
     try {
-      const r = await superAdminService.getPayments(paymentFilter);
+      const r = await superAdminService.getPayments({ status: paymentFilter, page: paymentPage, limit: PAGE_SIZE });
       setPayments(r.data.payments || []);
-    } catch {
-      /* ignore */
+      setPaymentTotal(r.data.total || 0);
+    } catch (err) {
+      setPayments([]);
+      setListError(apiMessage(err, 'Gagal memuat daftar pembayaran.'));
     } finally {
       setLoading(false);
     }
-  }, [paymentFilter]);
+  }, [paymentFilter, paymentPage]);
 
   const fetchPlans = useCallback(async () => {
     setLoading(true);
+    setListError('');
     try {
       const r = await superAdminService.getPlans();
       setPlans(r.data || []);
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setListError(apiMessage(err, 'Gagal memuat daftar paket.'));
     } finally {
       setLoading(false);
     }
@@ -97,9 +117,24 @@ export default function SuperAdminDashboard() {
     fetchStats();
   }, [fetchStats, navigate]);
 
+  useEffect(() => { if (tab === 'dashboard') fetchStats(); }, [tab, fetchStats]);
   useEffect(() => { if (tab === 'businesses') fetchBusinesses(); }, [tab, fetchBusinesses]);
-  useEffect(() => { if (tab === 'payments') fetchPayments(); }, [tab, paymentFilter, fetchPayments]);
+  useEffect(() => { if (tab === 'payments') fetchPayments(); }, [tab, fetchPayments]);
   useEffect(() => { if (tab === 'plans') fetchPlans(); }, [tab, fetchPlans]);
+
+  const changeTab = (id) => {
+    setListError('');
+    setTab(id);
+  };
+
+  const updateBusinessQuery = useCallback((partial) => {
+    setBusinessQuery((prev) => ({ ...prev, ...partial }));
+  }, []);
+
+  const changePaymentFilter = (status) => {
+    setPaymentFilter(status);
+    setPaymentPage(1);
+  };
 
   const handleApprove = async (paymentId) => {
     try {
@@ -108,7 +143,7 @@ export default function SuperAdminDashboard() {
       fetchPayments();
       fetchStats();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Gagal approve', 'error');
+      showToast(apiMessage(err, 'Gagal approve'), 'error');
     }
   };
 
@@ -119,31 +154,31 @@ export default function SuperAdminDashboard() {
       fetchPayments();
       fetchStats();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Gagal reject', 'error');
+      showToast(apiMessage(err, 'Gagal reject'), 'error');
     }
   };
 
   const handleToggle = async (businessId, currentStatus) => {
     const action = currentStatus === 'SUSPENDED' ? 'ACTIVATE' : 'SUSPEND';
     try {
-      await superAdminService.toggleBusiness(businessId, action);
-      showToast(`Toko berhasil ${action === 'SUSPEND' ? 'ditangguhkan' : 'diaktifkan'}`);
+      const r = await superAdminService.toggleBusiness(businessId, action);
+      showToast(r.data?.message || 'Status toko diperbarui');
       fetchBusinesses();
       fetchStats();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Gagal', 'error');
+      showToast(apiMessage(err, 'Gagal mengubah status toko'), 'error');
     }
   };
 
-  const handleDelete = async (businessId) => {
+  const handleDelete = async (businessId, confirmName) => {
     try {
-      await superAdminService.deleteBusiness(businessId);
-      showToast('Toko dan seluruh datanya berhasil dihapus!');
+      const r = await superAdminService.deleteBusiness(businessId, confirmName);
+      showToast(r.data?.message || 'Toko berhasil dinonaktifkan');
       setConfirmModal(null);
       fetchBusinesses();
       fetchStats();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Gagal hapus', 'error');
+      showToast(apiMessage(err, 'Gagal menonaktifkan toko'), 'error');
     }
   };
 
@@ -166,7 +201,7 @@ export default function SuperAdminDashboard() {
       setPlanModal(null);
       fetchPlans();
     } catch (err) {
-      showToast(err.response?.data?.message || 'Gagal menyimpan paket', 'error');
+      showToast(apiMessage(err, 'Gagal menyimpan paket'), 'error');
     }
   };
 
@@ -197,7 +232,7 @@ export default function SuperAdminDashboard() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setTab(item.id)}
+                onClick={() => changeTab(item.id)}
                 aria-current={tab === item.id ? 'page' : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${tab === item.id ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
               >
@@ -247,36 +282,61 @@ export default function SuperAdminDashboard() {
         />
 
         <div className="p-8">
-          {tab === 'dashboard' && <DashboardTab stats={stats} />}
+          {tab === 'dashboard' && (
+            <DashboardTab stats={stats} error={statsError} onRetry={fetchStats} onNavigate={changeTab} />
+          )}
           {tab === 'payments' && (
             <PaymentsTab
               payments={payments}
               loading={loading}
+              error={listError}
+              page={paymentPage}
+              total={paymentTotal}
+              limit={PAGE_SIZE}
+              onPageChange={setPaymentPage}
               paymentFilter={paymentFilter}
-              setPaymentFilter={setPaymentFilter}
+              setPaymentFilter={changePaymentFilter}
               onRefresh={fetchPayments}
-              onViewProof={(p) => setProofModal({ id: p.id, url: p.proofOfPayment, businessName: p.business?.name, planName: p.plan?.name, amount: p.amount })}
-              onApprove={handleApprove}
-              onReject={handleReject}
+              onViewProof={(p) => setProofModal({
+                id: p.id,
+                url: p.proofOfPayment,
+                businessName: p.business?.name,
+                planName: p.plan?.name,
+                amount: p.amount,
+                status: p.status,
+              })}
             />
           )}
           {tab === 'businesses' && (
             <BusinessesTab
               businesses={businesses}
               loading={loading}
+              error={listError}
+              query={businessQuery}
+              total={businessTotal}
+              limit={PAGE_SIZE}
+              onQueryChange={updateBusinessQuery}
               onRefresh={fetchBusinesses}
               onToggle={handleToggle}
               onDeleteRequest={setConfirmModal}
             />
           )}
           {tab === 'plans' && (
-            <PlansTab
-              plans={plans}
-              loading={loading}
-              onRefresh={fetchPlans}
-              onAdd={() => setPlanModal({ name: '', price: 50000, durationDays: 30, features: 'Kasir Tanpa Batas\nLaporan Keuangan\nManajemen Staf', isActive: true })}
-              onEdit={(p) => setPlanModal({ id: p.id, name: p.name, price: p.price, durationDays: p.durationDays, features: Array.isArray(p.features) ? p.features.join('\n') : '', isActive: p.isActive })}
-            />
+            <>
+              {listError && (
+                <div role="alert" className="mb-4 flex items-center justify-between gap-3 bg-red-500/10 border border-red-400/30 text-red-300 rounded-2xl px-4 py-3 text-sm">
+                  <span>{listError}</span>
+                  <button type="button" onClick={fetchPlans} className="font-semibold underline">Coba lagi</button>
+                </div>
+              )}
+              <PlansTab
+                plans={plans}
+                loading={loading}
+                onRefresh={fetchPlans}
+                onAdd={() => setPlanModal({ name: '', price: 50000, durationDays: 30, features: 'Kasir Tanpa Batas\nLaporan Keuangan\nManajemen Staf', isActive: true })}
+                onEdit={(p) => setPlanModal({ id: p.id, name: p.name, price: p.price, durationDays: p.durationDays, features: Array.isArray(p.features) ? p.features.join('\n') : '', isActive: p.isActive })}
+              />
+            </>
           )}
           {tab === 'whatsapp' && <WhatsAppTab />}
         </div>
